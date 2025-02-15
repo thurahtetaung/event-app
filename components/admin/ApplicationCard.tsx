@@ -14,39 +14,39 @@ interface ApplicationCardProps {
 
 export function ApplicationCard({ application }: ApplicationCardProps) {
   return (
-    <Link href={`/admin/applications/${application.id}`} className="block mb-4">
+    <Link href={`/admin/applications/${application.application.id}`} className="block mb-4">
       <Card className="transition-colors hover:bg-muted/50">
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div className="grid gap-1">
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-muted-foreground" />
-                <h3 className="font-semibold">{application.organizationName}</h3>
+                <h3 className="font-semibold">{application.application.organizationName}</h3>
                 <Badge
                   variant={
-                    application.status === "approved"
+                    application.application.status === "approved"
                       ? "success"
-                      : application.status === "rejected"
+                      : application.application.status === "rejected"
                       ? "destructive"
                       : "default"
                   }
                   className={cn(
                     "capitalize",
-                    application.status === "pending" && "bg-primary/10 text-primary hover:bg-primary/20"
+                    application.application.status === "pending" && "bg-primary/10 text-primary hover:bg-primary/20"
                   )}
                 >
-                  {application.status}
+                  {application.application.status}
                 </Badge>
               </div>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span>{application.user.name}</span>
+                <span>{`${application.applicant.firstName} ${application.applicant.lastName}`}</span>
                 <span>•</span>
-                <span>{application.user.email}</span>
+                <span>{application.applicant.email}</span>
                 <span>•</span>
                 <div className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  <time dateTime={application.submittedAt}>
-                    {format(new Date(application.submittedAt), "PPP")}
+                  <time dateTime={application.application.createdAt}>
+                    {format(new Date(application.application.createdAt), "PPP")}
                   </time>
                 </div>
               </div>

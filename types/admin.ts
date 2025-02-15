@@ -1,12 +1,22 @@
 export interface Application {
-  id: string
-  status: "pending" | "approved" | "rejected"
-  submittedAt: string
-  user: {
+  application: {
+    id: string
+    status: "pending" | "approved" | "rejected"
+    createdAt: string
+    organizationName: string
+    organizationType: string
+    description: string
+    experience: string
+    website: string | null
+    eventTypes: string
+    phoneNumber: string
+    address: string
+    socialLinks: string | null
+  }
+  applicant: {
     id: string
     email: string
-    name: string
+    firstName: string
+    lastName: string
   }
-  organizationName: string
-  organizationType: string
 }

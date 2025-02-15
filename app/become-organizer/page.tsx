@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
+import { apiClient } from "@/lib/api-client"
 
 const EVENT_TYPES = [
   { id: "conference", label: "Conferences & Seminars" },
@@ -32,7 +33,16 @@ const formSchema = z.object({
   website: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
   description: z.string().min(50, "Please provide a detailed description (minimum 50 characters)"),
   experience: z.string().min(30, "Please describe your experience (minimum 30 characters)"),
-  eventTypes: z.array(z.string()).min(1, "Please select at least one event type"),
+  eventTypes: z.array(z.enum([
+    "conference",
+    "workshop",
+    "concert",
+    "exhibition",
+    "sports",
+    "networking",
+    "festival",
+    "corporate"
+  ])).min(1, "Please select at least one event type"),
   phoneNumber: z.string().min(10, "Please enter a valid phone number"),
   address: z.string().min(10, "Please enter your complete address"),
   socialLinks: z.object({
@@ -67,12 +77,11 @@ export default function BecomeOrganizerPage() {
   async function onSubmit(data: FormValues) {
     setIsSubmitting(true)
     try {
-      // In a real app, submit to your API
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await apiClient.organizerApplications.create(data)
       toast.success("Application submitted successfully!")
-      router.push("/my-events?application=submitted")
+      router.push("/application-status")
     } catch (error) {
-      toast.error("Failed to submit application. Please try again.")
+      toast.error(error instanceof Error ? error.message : "Failed to submit application. Please try again.")
     } finally {
       setIsSubmitting(false)
     }

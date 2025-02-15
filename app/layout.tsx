@@ -25,7 +25,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
           <AuthProvider>
             <div className="flex min-h-screen flex-col">
               <SiteHeader className="sticky top-0 z-50" />
@@ -34,7 +39,16 @@ export default function RootLayout({
               </main>
               <SiteFooter className="mt-auto" />
             </div>
-            <Toaster richColors position="top-center" />
+            <Toaster
+              position="top-center"
+              richColors
+              toastOptions={{
+                className: "text-center",
+                style: {
+                  textAlign: "center",
+                },
+              }}
+            />
           </AuthProvider>
         </ThemeProvider>
       </body>

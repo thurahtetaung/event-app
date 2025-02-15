@@ -12,14 +12,22 @@ import { Calendar, Clock, MapPin, Users, Ticket, Globe, AlertCircle, Plus, Penci
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { TicketForm } from "@/components/organizer/TicketForm"
 import { EventSettings } from "@/components/organizer/EventSettings"
+import { format } from "date-fns"
 
 // Mock data - replace with your API call
 const event = {
   id: "1",
   title: "Tech Conference 2024",
   description: "A conference bringing together tech leaders and innovators",
-  date: "2024-06-15",
-  time: "09:00 AM",
+  date: new Date("2024-06-15"),
+  startTime: {
+    hour: "09",
+    minute: "00"
+  },
+  endTime: {
+    hour: "17",
+    minute: "00"
+  },
   location: "Convention Center, City",
   capacity: 1000,
   ticketsSold: 150,
@@ -126,8 +134,10 @@ export default function EventDetailPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{event.date}</div>
-            <p className="text-xs text-muted-foreground">{event.time}</p>
+            <div className="text-2xl font-bold">{format(event.date, "PPP")}</div>
+            <p className="text-xs text-muted-foreground">
+              {event.startTime.hour}:{event.startTime.minute} - {event.endTime.hour}:{event.endTime.minute}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -263,11 +273,7 @@ export default function EventDetailPage() {
               <EventSettings
                 event={{
                   ...event,
-                  date: new Date(event.date),
-                  time: {
-                    hour: event.time.split(" ")[0].split(":")[0],
-                    minute: event.time.split(" ")[0].split(":")[1]
-                  }
+                  date: new Date(event.date)
                 }}
               />
             </TabsContent>

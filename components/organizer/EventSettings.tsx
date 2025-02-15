@@ -25,6 +25,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Label } from "@/components/ui/label"
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -32,7 +33,11 @@ const formSchema = z.object({
   date: z.date({
     required_error: "Date is required",
   }),
-  time: z.object({
+  startTime: z.object({
+    hour: z.string().min(1, "Hour is required"),
+    minute: z.string().min(1, "Minute is required"),
+  }),
+  endTime: z.object({
     hour: z.string().min(1, "Hour is required"),
     minute: z.string().min(1, "Minute is required"),
   }),
@@ -49,7 +54,11 @@ interface EventSettingsProps {
     title: string
     description: string
     date: Date
-    time: {
+    startTime?: {
+      hour: string
+      minute: string
+    }
+    endTime?: {
       hour: string
       minute: string
     }
@@ -65,9 +74,13 @@ export function EventSettings({ event }: EventSettingsProps) {
       title: event.title,
       description: event.description,
       date: event.date,
-      time: {
-        hour: event.time.hour,
-        minute: event.time.minute,
+      startTime: event.startTime || {
+        hour: "12",
+        minute: "00",
+      },
+      endTime: event.endTime || {
+        hour: "13",
+        minute: "00",
       },
       location: event.location,
       capacity: String(event.capacity),
@@ -76,9 +89,6 @@ export function EventSettings({ event }: EventSettingsProps) {
       allowWaitlist: true,
     },
   })
-
-  // Watch time values to make them reactive
-  const timeValues = form.watch("time");
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     // Add API call to update event settings
@@ -122,14 +132,14 @@ export function EventSettings({ event }: EventSettingsProps) {
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <FormLabel>Date</FormLabel>
+            <div className="grid gap-6">
+              <div className="space-y-2">
+                <Label>Date</Label>
                 <FormField
                   control={form.control}
                   name="date"
                   render={({ field }) => (
-                    <FormItem className="mt-2">
+                    <FormItem>
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
@@ -161,47 +171,92 @@ export function EventSettings({ event }: EventSettingsProps) {
                   )}
                 />
               </div>
-              <div>
-                <FormLabel>Time</FormLabel>
-                <div className="flex gap-2 mt-2">
-                  <Select
-                    value={timeValues.hour}
-                    onValueChange={(hour) => {
-                      form.setValue("time.hour", hour, { shouldValidate: true });
-                    }}
-                  >
-                    <SelectTrigger className="w-[110px]">
-                      <SelectValue placeholder="Hour" />
-                    </SelectTrigger>
-                    <SelectContent className="h-[200px]">
-                      {Array.from({ length: 24 }, (_, i) => {
-                        const hour = i.toString().padStart(2, "0")
-                        return (
-                          <SelectItem key={hour} value={hour}>
-                            {hour}:00
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Start Time</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={form.watch("startTime.hour")}
+                      onValueChange={(hour) => {
+                        form.setValue("startTime.hour", hour, { shouldValidate: true });
+                      }}
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue placeholder="Hour" />
+                      </SelectTrigger>
+                      <SelectContent className="h-[200px]">
+                        {Array.from({ length: 24 }, (_, i) => {
+                          const hour = i.toString().padStart(2, "0")
+                          return (
+                            <SelectItem key={hour} value={hour}>
+                              {hour}:00
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <span className="flex items-center">:</span>
+                    <Select
+                      value={form.watch("startTime.minute")}
+                      onValueChange={(minute) => {
+                        form.setValue("startTime.minute", minute, { shouldValidate: true });
+                      }}
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue placeholder="Minute" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["00", "15", "30", "45"].map((minute) => (
+                          <SelectItem key={minute} value={minute}>
+                            {minute}
                           </SelectItem>
-                        )
-                      })}
-                    </SelectContent>
-                  </Select>
-                  <span className="flex items-center">:</span>
-                  <Select
-                    value={timeValues.minute}
-                    onValueChange={(minute) => {
-                      form.setValue("time.minute", minute, { shouldValidate: true });
-                    }}
-                  >
-                    <SelectTrigger className="w-[110px]">
-                      <SelectValue placeholder="Minute" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["00", "15", "30", "45"].map((minute) => (
-                        <SelectItem key={minute} value={minute}>
-                          {minute}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>End Time</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={form.watch("endTime.hour")}
+                      onValueChange={(hour) => {
+                        form.setValue("endTime.hour", hour, { shouldValidate: true });
+                      }}
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue placeholder="Hour" />
+                      </SelectTrigger>
+                      <SelectContent className="h-[200px]">
+                        {Array.from({ length: 24 }, (_, i) => {
+                          const hour = i.toString().padStart(2, "0")
+                          return (
+                            <SelectItem key={hour} value={hour}>
+                              {hour}:00
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <span className="flex items-center">:</span>
+                    <Select
+                      value={form.watch("endTime.minute")}
+                      onValueChange={(minute) => {
+                        form.setValue("endTime.minute", minute, { shouldValidate: true });
+                      }}
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue placeholder="Minute" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["00", "15", "30", "45"].map((minute) => (
+                          <SelectItem key={minute} value={minute}>
+                            {minute}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </div>

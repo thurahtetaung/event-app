@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { themeConfig } from "@/lib/theme"
 import { cn } from "@/lib/utils"
-import AuthStatus from "@/components/auth/AuthStatus"
+import { AuthStatus } from "@/components/auth/AuthStatus"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 interface SiteHeaderProps {

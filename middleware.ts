@@ -2,9 +2,10 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 // Add routes that don't require authentication
-const publicRoutes = ["/", "/login", "/register", "/verify", "/landing"]
+const publicRoutes = ["/", "/login", "/register", "/landing"]
 
 export function middleware(request: NextRequest) {
+  // Check for token in cookie
   const token = request.cookies.get("token")?.value
   const { pathname } = request.nextUrl
 
@@ -34,7 +35,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  return NextResponse.next()
+  // Add token to Authorization header for API requests
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set("Authorization", `Bearer ${token}`)
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
 }
 
 // Configure which routes to run middleware on

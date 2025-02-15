@@ -1,15 +1,17 @@
-// Remove "use client" since this is a server component
-import type { Metadata } from "next"
+"use client"
+
+import { useEffect, useState } from "react"
 import { Suspense } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, FileText, Settings, BarChart } from "lucide-react"
+import { Users, FileText, Settings, BarChart, Loader2 } from "lucide-react"
 import RecentApplications from "@/components/admin/RecentApplications"
 import UserStats from "@/components/admin/UserStats"
 import { Skeleton } from "@/components/ui/skeleton"
+import { apiClient } from "@/lib/api-client"
 
-export const metadata: Metadata = {
-  title: "Admin Dashboard",
-  description: "Manage applications, users, and platform settings",
+interface PendingStats {
+  total: number
+  newSinceYesterday: number
 }
 
 function UserStatsLoading() {
@@ -21,6 +23,24 @@ function UserStatsLoading() {
 }
 
 export default function AdminDashboard() {
+  const [pendingStats, setPendingStats] = useState<PendingStats | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const data = await apiClient.organizerApplications.getPendingStats()
+        setPendingStats(data as PendingStats)
+      } catch (error) {
+        console.error("Error fetching pending stats:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
+
   return (
     <div className="p-8 space-y-8">
       <div>
@@ -45,8 +65,19 @@ export default function AdminDashboard() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground">+5 new since yesterday</p>
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{pendingStats?.total || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  +{pendingStats?.newSinceYesterday || 0} new since yesterday
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>

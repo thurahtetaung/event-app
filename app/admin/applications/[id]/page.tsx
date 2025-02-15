@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -13,32 +13,29 @@ import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { ApproveModal } from "@/components/admin/ApproveModal"
 import { RejectModal } from "@/components/admin/RejectModal"
+import { apiClient } from "@/lib/api-client"
+import { Loader2 } from "lucide-react"
 
-interface Application {
-  id: string
-  status: "pending" | "approved" | "rejected"
-  submittedAt: string
-  user: {
+interface ApplicationDetails {
+  application: {
     id: string
-    email: string
-    name: string
-  }
+    status: "pending" | "approved" | "rejected"
+    createdAt: string
   organizationName: string
   organizationType: string
-}
-
-interface ApplicationDetails extends Application {
-  website?: string
   description: string
   experience: string
-  eventTypes: string[]
+    website: string | null
+    eventTypes: string
   phoneNumber: string
   address: string
-  socialLinks: {
-    facebook?: string
-    instagram?: string
-    twitter?: string
-    linkedin?: string
+    socialLinks: string | null
+  }
+  applicant: {
+    id: string
+    email: string
+    firstName: string
+    lastName: string
   }
 }
 
@@ -53,66 +50,80 @@ const EVENT_TYPES = [
   { id: "corporate", label: "Corporate Events" },
 ] as const
 
-// This would come from your API in a real app
-const SAMPLE_APPLICATION: ApplicationDetails = {
-  id: "1",
-  status: "pending" as const,
-  submittedAt: "2024-02-15T10:30:00Z",
-  user: {
-    id: "user1",
-    email: "john@example.com",
-    name: "John Doe",
-  },
-  organizationName: "EventPro Solutions",
-  organizationType: "company",
-  website: "https://eventpro.example.com",
-  description: "We are a professional event management company with over 5 years of experience in organizing corporate and social events.",
-  experience: "Successfully organized over 50 corporate events and conferences, including international tech summits and leadership workshops.",
-  eventTypes: ["conference", "corporate", "networking"],
-  phoneNumber: "+1 (555) 123-4567",
-  address: "123 Business Ave, Suite 100, New York, NY 10001",
-  socialLinks: {
-    facebook: "https://facebook.com/eventpro",
-    instagram: "https://instagram.com/eventpro",
-    twitter: "https://twitter.com/eventpro",
-    linkedin: "https://linkedin.com/company/eventpro",
-  },
-}
-
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const [application, setApplication] = useState<ApplicationDetails | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isActionLoading, setIsActionLoading] = useState(false)
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false)
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false)
-  const application = SAMPLE_APPLICATION // In a real app, fetch based on params.id
+
+  useEffect(() => {
+    async function fetchApplication() {
+      try {
+        const data = await apiClient.organizerApplications.getById(params.id)
+        setApplication(data as ApplicationDetails)
+      } catch (error) {
+        console.error("Error fetching application:", error)
+        toast.error("Failed to load application details")
+        router.push("/admin/applications")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchApplication()
+  }, [params.id, router])
 
   const handleApprove = async () => {
-    setIsLoading(true)
+    if (!application) return
+    setIsActionLoading(true)
     try {
-      // In a real app, call your API
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await apiClient.organizerApplications.updateStatus(application.application.id, {
+        status: "approved"
+      })
       toast.success("Application approved successfully")
       router.push("/admin/applications")
     } catch (error) {
+      console.error("Error approving application:", error)
       toast.error("Failed to approve application")
     } finally {
-      setIsLoading(false)
+      setIsActionLoading(false)
     }
   }
 
   const handleReject = async (reason: string) => {
-    setIsLoading(true)
+    if (!application) return
+    setIsActionLoading(true)
     try {
-      // In a real app, call your API with the reason
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await apiClient.organizerApplications.updateStatus(application.application.id, {
+        status: "rejected",
+        rejectionReason: reason
+      })
       toast.success("Application rejected")
       router.push("/admin/applications")
     } catch (error) {
+      console.error("Error rejecting application:", error)
       toast.error("Failed to reject application")
     } finally {
-      setIsLoading(false)
+      setIsActionLoading(false)
     }
   }
+
+  if (isLoading) {
+    return (
+      <div className="container py-8">
+        <div className="flex justify-center items-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!application) return null
+
+  const socialLinks = application.application.socialLinks ? JSON.parse(application.application.socialLinks) : {}
+  const eventTypes = JSON.parse(application.application.eventTypes) as string[]
 
   return (
     <div className="container py-8">
@@ -130,25 +141,25 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Organizer Application</h1>
             <p className="text-muted-foreground">
-              Submitted on <time dateTime={application.submittedAt}>
-                {format(new Date(application.submittedAt), "PPP")}
+              Submitted on <time dateTime={application.application.createdAt}>
+                {format(new Date(application.application.createdAt), "PPP")}
               </time>
             </p>
           </div>
           <Badge
             variant={
-              application.status === "approved"
+              application.application.status === "approved"
                 ? "success"
-                : application.status === "rejected"
+                : application.application.status === "rejected"
                 ? "destructive"
                 : "default"
             }
             className={cn(
               "capitalize",
-              application.status === "pending" && "bg-primary/10 text-primary hover:bg-primary/20"
+              application.application.status === "pending" && "bg-primary/10 text-primary hover:bg-primary/20"
             )}
           >
-            {application.status}
+            {application.application.status}
           </Badge>
         </div>
       </div>
@@ -163,28 +174,28 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <div className="font-medium">Organization Name</div>
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-muted-foreground" />
-                <span>{application.organizationName}</span>
+                <span>{application.application.organizationName}</span>
               </div>
             </div>
 
             <div className="grid gap-2">
               <div className="font-medium">Organization Type</div>
               <Badge variant="outline" className="w-fit capitalize">
-                {application.organizationType}
+                {application.application.organizationType}
               </Badge>
             </div>
 
-            {application.website && (
+            {application.application.website && (
               <div className="grid gap-2">
                 <div className="font-medium">Website</div>
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-muted-foreground" />
                   <Link
-                    href={application.website}
+                    href={application.application.website}
                     target="_blank"
                     className="text-primary hover:underline"
                   >
-                    {application.website}
+                    {application.application.website}
                   </Link>
                 </div>
               </div>
@@ -192,18 +203,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
             <div className="grid gap-2">
               <div className="font-medium">Description</div>
-              <p className="text-muted-foreground">{application.description}</p>
+              <p className="text-muted-foreground">{application.application.description}</p>
             </div>
 
             <div className="grid gap-2">
               <div className="font-medium">Experience</div>
-              <p className="text-muted-foreground">{application.experience}</p>
+              <p className="text-muted-foreground">{application.application.experience}</p>
             </div>
 
             <div className="grid gap-2">
               <div className="font-medium">Event Types</div>
               <div className="flex flex-wrap gap-2">
-                {application.eventTypes.map((type) => {
+                {eventTypes.map((type) => {
                   const eventType = EVENT_TYPES.find(t => t.id === type)
                   return (
                     <Badge key={type} variant="secondary">
@@ -227,10 +238,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />
                   <Link
-                    href={`mailto:${application.user.email}`}
+                    href={`mailto:${application.applicant.email}`}
                     className="text-primary hover:underline"
                   >
-                    {application.user.email}
+                    {application.applicant.email}
                   </Link>
                 </div>
               </div>
@@ -240,10 +251,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <Link
-                    href={`tel:${application.phoneNumber}`}
+                    href={`tel:${application.application.phoneNumber}`}
                     className="text-primary hover:underline"
                   >
-                    {application.phoneNumber}
+                    {application.application.phoneNumber}
                   </Link>
                 </div>
               </div>
@@ -252,7 +263,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 <div className="font-medium">Address</div>
                 <div className="flex items-start gap-2">
                   <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
-                  <span className="text-muted-foreground">{application.address}</span>
+                  <span className="text-muted-foreground">{application.application.address}</span>
                 </div>
               </div>
             </CardContent>
@@ -264,13 +275,13 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </CardHeader>
             <CardContent>
               <div className="grid gap-4">
-                {Object.entries(application.socialLinks).map(([platform, url]) => {
+                {Object.entries(socialLinks).map(([platform, url]) => {
                   if (!url) return null
                   return (
                     <div key={platform} className="flex items-center justify-between">
                       <span className="capitalize">{platform}</span>
                       <Link
-                        href={url}
+                        href={url as string}
                         target="_blank"
                         className="text-primary hover:underline"
                       >
@@ -283,7 +294,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </CardContent>
           </Card>
 
-          {application.status === "pending" && (
+          {application.application.status === "pending" && (
             <Card>
               <CardHeader>
                 <CardTitle>Actions</CardTitle>
@@ -296,7 +307,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   <Button
                     className="flex-1"
                     onClick={() => setIsApproveModalOpen(true)}
-                    disabled={isLoading}
+                    disabled={isActionLoading}
                   >
                     <CheckCircle2 className="mr-2 h-4 w-4" />
                     Approve
@@ -305,7 +316,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                     variant="destructive"
                     className="flex-1"
                     onClick={() => setIsRejectModalOpen(true)}
-                    disabled={isLoading}
+                    disabled={isActionLoading}
                   >
                     <XCircle className="mr-2 h-4 w-4" />
                     Reject
@@ -321,7 +332,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         isOpen={isApproveModalOpen}
         onClose={() => setIsApproveModalOpen(false)}
         onConfirm={handleApprove}
-        isLoading={isLoading}
+        isLoading={isActionLoading}
         application={application}
       />
 
@@ -329,10 +340,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         isOpen={isRejectModalOpen}
         onClose={() => setIsRejectModalOpen(false)}
         onConfirm={handleReject}
-        isLoading={isLoading}
+        isLoading={isActionLoading}
         application={application}
       />
     </div>
   )
 }
+
 

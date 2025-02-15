@@ -52,7 +52,11 @@ interface EventDetails {
   title: string
   description: string
   date: Date | undefined
-  time: {
+  startTime: {
+    hour: string
+    minute: string
+  }
+  endTime: {
     hour: string
     minute: string
   }
@@ -83,8 +87,12 @@ export function EventCreationForm() {
     title: "",
     description: "",
     date: undefined,
-    time: {
+    startTime: {
       hour: "12",
+      minute: "00"
+    },
+    endTime: {
+      hour: "13",
       minute: "00"
     },
     venue: "",
@@ -290,88 +298,142 @@ export function EventCreationForm() {
           </div>
 
           {/* Date and Time */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Event Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !eventDetails.date && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {eventDetails.date ? (
-                      format(eventDetails.date, "PPP")
-                    ) : (
-                      <span>Pick a date</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={eventDetails.date}
-                    onSelect={(date) =>
-                      setEventDetails((prev) => ({ ...prev, date }))
-                    }
-                    disabled={(date) =>
-                      date < new Date(new Date().setHours(0, 0, 0, 0))
-                    }
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label>Event Time</Label>
-              <div className="flex gap-2">
-                <Select
-                  value={eventDetails.time.hour}
-                  onValueChange={(hour) =>
-                    setEventDetails((prev) => ({
-                      ...prev,
-                      time: { ...prev.time, hour },
-                    }))
-                  }
-                >
-                  <SelectTrigger className="w-[110px]">
-                    <SelectValue placeholder="Hour" />
-                  </SelectTrigger>
-                  <SelectContent className="h-[200px]">
-                    {Array.from({ length: 24 }, (_, i) => {
-                      const hour = i.toString().padStart(2, "0")
-                      return (
-                        <SelectItem key={hour} value={hour}>
-                          {hour}:00
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-                <span className="flex items-center">:</span>
-                <Select
-                  value={eventDetails.time.minute}
-                  onValueChange={(minute) =>
-                    setEventDetails((prev) => ({
-                      ...prev,
-                      time: { ...prev.time, minute },
-                    }))
-                  }
-                >
-                  <SelectTrigger className="w-[110px]">
-                    <SelectValue placeholder="Minute" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["00", "15", "30", "45"].map((minute) => (
-                      <SelectItem key={minute} value={minute}>
-                        {minute}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div className="space-y-4">
+            <Label>Event Date & Time</Label>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !eventDetails.date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {eventDetails.date ? (
+                        format(eventDetails.date, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={eventDetails.date}
+                      onSelect={(date) =>
+                        setEventDetails((prev) => ({ ...prev, date }))
+                      }
+                      disabled={(date) =>
+                        date < new Date(new Date().setHours(0, 0, 0, 0))
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <Label>Start Time</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={eventDetails.startTime.hour}
+                      onValueChange={(hour) =>
+                        setEventDetails((prev) => ({
+                          ...prev,
+                          startTime: { ...prev.startTime, hour },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue placeholder="Hour" />
+                      </SelectTrigger>
+                      <SelectContent className="h-[200px]">
+                        {Array.from({ length: 24 }, (_, i) => {
+                          const hour = i.toString().padStart(2, "0")
+                          return (
+                            <SelectItem key={hour} value={hour}>
+                              {hour}:00
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <span className="flex items-center">:</span>
+                    <Select
+                      value={eventDetails.startTime.minute}
+                      onValueChange={(minute) =>
+                        setEventDetails((prev) => ({
+                          ...prev,
+                          startTime: { ...prev.startTime, minute },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue placeholder="Minute" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["00", "15", "30", "45"].map((minute) => (
+                          <SelectItem key={minute} value={minute}>
+                            {minute}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>End Time</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={eventDetails.endTime.hour}
+                      onValueChange={(hour) =>
+                        setEventDetails((prev) => ({
+                          ...prev,
+                          endTime: { ...prev.endTime, hour },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue placeholder="Hour" />
+                      </SelectTrigger>
+                      <SelectContent className="h-[200px]">
+                        {Array.from({ length: 24 }, (_, i) => {
+                          const hour = i.toString().padStart(2, "0")
+                          return (
+                            <SelectItem key={hour} value={hour}>
+                              {hour}:00
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <span className="flex items-center">:</span>
+                    <Select
+                      value={eventDetails.endTime.minute}
+                      onValueChange={(minute) =>
+                        setEventDetails((prev) => ({
+                          ...prev,
+                          endTime: { ...prev.endTime, minute },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue placeholder="Minute" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["00", "15", "30", "45"].map((minute) => (
+                          <SelectItem key={minute} value={minute}>
+                            {minute}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -592,25 +654,71 @@ export function EventCreationForm() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Sale Start Date</Label>
-                        <Input
-                          type="datetime-local"
-                          value={ticket.saleStart}
-                          onChange={(e) =>
-                            updateTicketType(ticket.id, "saleStart", e.target.value)
-                          }
-                          required
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !ticket.saleStart && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {ticket.saleStart ? (
+                                format(new Date(ticket.saleStart), "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={ticket.saleStart ? new Date(ticket.saleStart) : undefined}
+                              onSelect={(date) =>
+                                updateTicketType(ticket.id, "saleStart", date ? date.toISOString() : "")
+                              }
+                              disabled={(date) =>
+                                date < new Date(new Date().setHours(0, 0, 0, 0))
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div className="space-y-2">
                         <Label>Sale End Date</Label>
-                        <Input
-                          type="datetime-local"
-                          value={ticket.saleEnd}
-                          onChange={(e) =>
-                            updateTicketType(ticket.id, "saleEnd", e.target.value)
-                          }
-                          required
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !ticket.saleEnd && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {ticket.saleEnd ? (
+                                format(new Date(ticket.saleEnd), "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={ticket.saleEnd ? new Date(ticket.saleEnd) : undefined}
+                              onSelect={(date) =>
+                                updateTicketType(ticket.id, "saleEnd", date ? date.toISOString() : "")
+                              }
+                              disabled={(date) =>
+                                date < new Date(new Date().setHours(0, 0, 0, 0))
+                              }
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </div>
 

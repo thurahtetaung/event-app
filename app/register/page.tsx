@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { format } from "date-fns"
 import { toast } from "sonner"
-import { Loader2, CalendarIcon } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -28,6 +28,10 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
+import { OtpVerification } from "@/components/auth/OtpVerification"
+import { useAuth } from "@/contexts/AuthContext"
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
 const registerSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters").max(50),
@@ -48,9 +52,12 @@ interface Country {
 
 export default function RegisterPage() {
   const router = useRouter()
+  const { login } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [countries, setCountries] = useState<Country[]>([])
   const [defaultCountry, setDefaultCountry] = useState<string>("")
+  const [showOtpInput, setShowOtpInput] = useState(false)
+  const [registeredEmail, setRegisteredEmail] = useState("")
 
   const form = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -83,29 +90,28 @@ export default function RegisterPage() {
   async function onSubmit(data: RegisterForm) {
     setIsLoading(true)
     try {
-      const response = await fetch("/api/auth/register", {
+      const response = await fetch(`${API_URL}/api/users/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...data,
-          dateOfBirth: format(data.dateOfBirth, "yyyy-MM-dd"),
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          dateOfBirth: data.dateOfBirth.toISOString(),
+          country: data.country,
+          role: "user",
         }),
       })
 
+      const result = await response.json()
+
       if (!response.ok) {
-        const error = await response.json()
-        if (error.errors) {
-          throw new Error(error.errors.map((e: any) => e.message).join(", "))
-        }
-        throw new Error(error.message || "Registration failed")
+        throw new Error(result.message || "Registration failed")
       }
 
-      const result = await response.json()
-      toast.success(result.message)
-
-      // Store email for verification and redirect
-      localStorage.setItem("verificationEmail", data.email)
-      router.push("/verify")
+      setRegisteredEmail(data.email)
+      setShowOtpInput(true)
+      toast.success("Registration successful! Please verify your email.")
     } catch (error) {
       console.error("Registration error:", error)
       toast.error(error instanceof Error ? error.message : "Failed to create account. Please try again.")
@@ -114,10 +120,79 @@ export default function RegisterPage() {
     }
   }
 
+  const handleVerifyOtp = async (otp: string) => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/api/users/verifyRegistration`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: registeredEmail, otp }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || "Invalid OTP")
+      }
+
+      await login(data.access_token)
+      toast.success("Email verified successfully")
+      router.push("/")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invalid OTP")
+      console.error(error)
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/users/resendRegistrationOTP`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: registeredEmail }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to resend OTP")
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to resend OTP")
+      throw error
+    }
+  }
+
   const maxDate = new Date()
   maxDate.setFullYear(maxDate.getFullYear() - 13) // Minimum age of 13
   const minDate = new Date()
   minDate.setFullYear(minDate.getFullYear() - 100) // Maximum age of 100
+
+  if (showOtpInput) {
+    return (
+      <div className="container max-w-lg py-10">
+        <Card>
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl">Verify your email</CardTitle>
+            <CardDescription>
+              Please verify your email address to continue
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OtpVerification
+              email={registeredEmail}
+              onVerify={handleVerifyOtp}
+              onResendOtp={handleResendOtp}
+              isLoading={isLoading}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="container max-w-lg py-10">

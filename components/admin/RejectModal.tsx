@@ -44,7 +44,7 @@ export function RejectModal({
         <AlertDialogHeader>
           <AlertDialogTitle>Reject Organization Application</AlertDialogTitle>
           <AlertDialogDescription>
-            Please provide a reason for rejecting the application from {application.organizationName}.
+            Please provide a reason for rejecting the application from {application.application.organizationName}.
             This will be sent to the applicant.
           </AlertDialogDescription>
         </AlertDialogHeader>
