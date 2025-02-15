@@ -1,12 +1,14 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 
 export default function LoginForm() {
+  const router = useRouter()
   const [email, setEmail] = useState("")
   const [otp, setOtp] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -25,13 +27,17 @@ export default function LoginForm() {
         body: JSON.stringify({ email }),
       })
 
-      if (!response.ok) throw new Error("Failed to send OTP")
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || "Failed to send OTP")
+      }
 
-      setShowOtpInput(true)
-      toast.success("OTP sent to your email")
+      // Store email and redirect to verify page
+      localStorage.setItem("verificationEmail", email)
+      router.push("/verify")
     } catch (error) {
-      toast.error("Failed to send OTP")
-      console.error(error)
+      console.error("Login error:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to send OTP")
     } finally {
       setIsLoading(false)
     }
@@ -92,7 +98,7 @@ export default function LoginForm() {
               ? "Loading..."
               : showOtpInput
               ? "Verify OTP"
-              : "Send Login Link"}
+              : "Continue with Email"}
           </Button>
         </div>
       </form>

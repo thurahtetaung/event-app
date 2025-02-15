@@ -5,13 +5,18 @@ import { usePathname } from "next/navigation"
 import { themeConfig } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 import AuthStatus from "@/components/auth/AuthStatus"
+import { ThemeToggle } from "@/components/theme-toggle"
 
-export function SiteHeader() {
+interface SiteHeaderProps {
+  className?: string
+}
+
+export function SiteHeader({ className }: SiteHeaderProps) {
   const pathname = usePathname()
 
   return (
-    <header className="w-full border-b bg-background">
-      <div className="container flex h-16 items-center justify-between">
+    <header className={cn("sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60", className)}>
+      <div className="container flex h-14 items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -27,6 +32,7 @@ export function SiteHeader() {
           </svg>
           <span className="text-lg font-semibold">{themeConfig.name}</span>
         </Link>
+
         <nav className="flex items-center gap-6">
           {themeConfig.mainNav.map((item) => (
             <Link
@@ -40,6 +46,7 @@ export function SiteHeader() {
               {item.title}
             </Link>
           ))}
+          <ThemeToggle />
           <AuthStatus />
         </nav>
       </div>

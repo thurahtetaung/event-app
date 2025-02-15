@@ -7,7 +7,7 @@ export default function CheckoutFailure() {
       <h1 className="text-3xl font-bold mb-4">Payment Failed</h1>
       <p className="mb-8">We're sorry, but there was an issue processing your payment. Please try again.</p>
       <Button asChild>
-        <Link href="/dashboard">Return to Dashboard</Link>
+        <Link href="/">Return to Home</Link>
       </Button>
     </div>
   )

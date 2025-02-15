@@ -1,10 +1,15 @@
 import Link from "next/link"
+import { cn } from "@/lib/utils"
 import { themeConfig } from "@/lib/theme"
 
-export function SiteFooter() {
+interface SiteFooterProps {
+  className?: string
+}
+
+export function SiteFooter({ className }: SiteFooterProps) {
   return (
-    <footer className="border-t bg-background">
-      <div className="container flex h-16 items-center justify-between">
+    <footer className={cn("w-full border-t bg-background", className)}>
+      <div className="container h-16 flex items-center justify-between py-4">
         <p className="text-sm text-muted-foreground">
           © 2024 {themeConfig.name}. All rights reserved.
         </p>

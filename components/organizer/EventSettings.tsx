@@ -9,12 +9,33 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Switch } from "@/components/ui/switch"
+import { Calendar } from "@/components/ui/calendar"
+import { DatePicker } from "@/components/ui/date-picker"
+import { format } from "date-fns"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { cn } from "@/lib/utils"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().min(1, "Description is required"),
-  date: z.string().min(1, "Date is required"),
-  time: z.string().min(1, "Time is required"),
+  date: z.date({
+    required_error: "Date is required",
+  }),
+  time: z.object({
+    hour: z.string().min(1, "Hour is required"),
+    minute: z.string().min(1, "Minute is required"),
+  }),
   location: z.string().min(1, "Location is required"),
   capacity: z.string().min(1, "Capacity is required"),
   isPublic: z.boolean().default(true),
@@ -27,8 +48,11 @@ interface EventSettingsProps {
     id: string
     title: string
     description: string
-    date: string
-    time: string
+    date: Date
+    time: {
+      hour: string
+      minute: string
+    }
     location: string
     capacity: number
   }
@@ -41,7 +65,10 @@ export function EventSettings({ event }: EventSettingsProps) {
       title: event.title,
       description: event.description,
       date: event.date,
-      time: event.time,
+      time: {
+        hour: event.time.hour,
+        minute: event.time.minute,
+      },
       location: event.location,
       capacity: String(event.capacity),
       isPublic: true,
@@ -50,6 +77,9 @@ export function EventSettings({ event }: EventSettingsProps) {
     },
   })
 
+  // Watch time values to make them reactive
+  const timeValues = form.watch("time");
+
   function onSubmit(values: z.infer<typeof formSchema>) {
     // Add API call to update event settings
     console.log(values)
@@ -57,7 +87,7 @@ export function EventSettings({ event }: EventSettingsProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="container max-w-5xl mx-auto space-y-8 py-8">
         <Card>
           <CardHeader>
             <CardTitle>Basic Information</CardTitle>
@@ -93,32 +123,87 @@ export function EventSettings({ event }: EventSettingsProps) {
               )}
             />
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="time"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Time</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div>
+                <FormLabel>Date</FormLabel>
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem className="mt-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div>
+                <FormLabel>Time</FormLabel>
+                <div className="flex gap-2 mt-2">
+                  <Select
+                    value={timeValues.hour}
+                    onValueChange={(hour) => {
+                      form.setValue("time.hour", hour, { shouldValidate: true });
+                    }}
+                  >
+                    <SelectTrigger className="w-[110px]">
+                      <SelectValue placeholder="Hour" />
+                    </SelectTrigger>
+                    <SelectContent className="h-[200px]">
+                      {Array.from({ length: 24 }, (_, i) => {
+                        const hour = i.toString().padStart(2, "0")
+                        return (
+                          <SelectItem key={hour} value={hour}>
+                            {hour}:00
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <span className="flex items-center">:</span>
+                  <Select
+                    value={timeValues.minute}
+                    onValueChange={(minute) => {
+                      form.setValue("time.minute", minute, { shouldValidate: true });
+                    }}
+                  >
+                    <SelectTrigger className="w-[110px]">
+                      <SelectValue placeholder="Minute" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["00", "15", "30", "45"].map((minute) => (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
             <FormField
               control={form.control}

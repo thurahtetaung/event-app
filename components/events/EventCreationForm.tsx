@@ -190,7 +190,7 @@ export function EventCreationForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8 pb-20">
+    <form onSubmit={handleSubmit} className="container max-w-5xl mx-auto space-y-8 py-8">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="details">Event Details</TabsTrigger>
@@ -340,7 +340,7 @@ export function EventCreationForm() {
                   <SelectTrigger className="w-[110px]">
                     <SelectValue placeholder="Hour" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="h-[200px]">
                     {Array.from({ length: 24 }, (_, i) => {
                       const hour = i.toString().padStart(2, "0")
                       return (

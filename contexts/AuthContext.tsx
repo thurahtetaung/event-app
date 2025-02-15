@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 
 interface User {
+  id: string
   email: string
-  role: string
+  role: "admin" | "organizer" | "user"
 }
 
 interface AuthContextType {
@@ -15,7 +16,7 @@ interface AuthContextType {
   loading: boolean
   error: string | null
   login: (token: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -72,8 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await fetchUser()
 
-      // Get the redirect path from URL or default to dashboard
-      const from = searchParams.get("from") || "/dashboard"
+      // Get the redirect path from URL or default to root
+      const from = searchParams.get("from") || "/"
       router.push(from)
       router.refresh()
 

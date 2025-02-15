@@ -1,6 +1,7 @@
 "use client"
 
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
+import { useTheme } from "next-themes"
 
 const data = [
   { name: "Jan", total: 1200 },
@@ -12,13 +13,42 @@ const data = [
 ]
 
 export default function UserStats() {
+  const { theme } = useTheme()
+  const isDark = theme === "dark"
+
   return (
     <ResponsiveContainer width="100%" height={350}>
       <BarChart data={data}>
-        <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-        <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-        <Tooltip />
-        <Bar dataKey="total" fill="#adfa1d" radius={[4, 4, 0, 0]} />
+        <XAxis
+          dataKey="name"
+          stroke={isDark ? "#a1a1aa" : "#71717a"}
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+        />
+        <YAxis
+          stroke={isDark ? "#a1a1aa" : "#71717a"}
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={(value) => `${value}`}
+        />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: isDark ? "hsl(var(--card))" : "hsl(var(--card))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: "var(--radius)",
+          }}
+          labelStyle={{
+            color: isDark ? "hsl(var(--card-foreground))" : "hsl(var(--card-foreground))"
+          }}
+        />
+        <Bar
+          dataKey="total"
+          fill="hsl(var(--primary))"
+          radius={[4, 4, 0, 0]}
+          opacity={0.9}
+        />
       </BarChart>
     </ResponsiveContainer>
   )

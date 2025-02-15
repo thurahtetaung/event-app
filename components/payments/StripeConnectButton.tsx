@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import { Check } from "lucide-react"
 
 interface StripeConnectButtonProps {
   isConnected?: boolean
@@ -66,7 +68,15 @@ export default function StripeConnectButton({
 
   if (connected) {
     return (
-      <Button variant="outline" className="bg-green-50" disabled>
+      <Button
+        variant="outline"
+        className={cn(
+          "border-green-500/20 bg-green-500/10 text-green-600 hover:bg-green-500/20 hover:text-green-700",
+          "dark:border-green-500/30 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30 dark:hover:text-green-300"
+        )}
+        disabled
+      >
+        <Check className="mr-2 h-4 w-4" />
         Connected to Stripe
       </Button>
     )

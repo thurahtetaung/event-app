@@ -54,7 +54,7 @@ export default function OrganizerLayout({
 
   return (
     <TooltipProvider>
-      <div className="flex h-[calc(100vh-4rem)]">
+      <div className="flex flex-1">
         {/* Sidebar */}
         <aside className={cn(
           "relative bg-muted/50 border-r transition-all duration-300",
@@ -146,9 +146,9 @@ export default function OrganizerLayout({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
+        <div className="flex-1">
           {children}
-        </main>
+        </div>
       </div>
     </TooltipProvider>
   )

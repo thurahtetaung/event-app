@@ -3,12 +3,8 @@ export const themeConfig = {
   description: "Modern event ticketing platform",
   mainNav: [
     {
-      title: "Events",
-      href: "/events",
-    },
-    {
-      title: "Dashboard",
-      href: "/dashboard",
+      title: "Browse Events",
+      href: "/",
     },
   ],
   footerNav: [

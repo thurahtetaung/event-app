@@ -48,14 +48,12 @@ export default function AuthStatus() {
       case "organizer":
         return { href: "/organizer/dashboard", label: "Organizer Dashboard" }
       default:
-        return { href: "/dashboard", label: "Dashboard" }
+        return { href: "/my-events", label: "My Events" }
     }
   }
 
-  const handleLogout = () => {
-    logout()
-    router.push("/")
-    router.refresh() // Force a refresh of the page data
+  const handleLogout = async () => {
+    await logout()
   }
 
   const dashboardLink = getDashboardLink()
@@ -82,9 +80,13 @@ export default function AuthStatus() {
         <DropdownMenuItem asChild>
           <Link href={dashboardLink.href}>{dashboardLink.label}</Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/events">My Events</Link>
-        </DropdownMenuItem>
+        {user.role === "user" && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="/become-organizer">Become an Organizer</Link>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-red-600 focus:bg-red-50 focus:text-red-600 dark:focus:bg-red-950"
