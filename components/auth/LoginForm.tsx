@@ -71,12 +71,16 @@ export default function LoginForm() {
         throw new Error(data.message || "Invalid OTP")
       }
 
-      const token = isCompletingRegistration ? data.access_token : data.data.access_token
-      if (!token) {
-        throw new Error("No access token received")
+      // Extract tokens based on response structure
+      const { access_token, refresh_token } = isCompletingRegistration
+        ? data
+        : data.data
+
+      if (!access_token || !refresh_token) {
+        throw new Error("Invalid token response")
       }
 
-      await login(token)
+      await login(access_token, refresh_token)
       toast.success(isCompletingRegistration ? "Registration completed successfully!" : "Login successful")
       router.push("/")
     } catch (error) {

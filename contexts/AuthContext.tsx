@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useContext, useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import Cookies from 'js-cookie'
@@ -23,44 +23,101 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   error: string | null
-  login: (token: string) => Promise<void>
+  login: (token: string, refreshToken: string) => Promise<void>
   logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Helper function to get token from cookie
-const getStoredToken = () => {
-  if (typeof window === "undefined") return null
-  const token = Cookies.get("token")
-  return token
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Debug log for user state changes
-  useEffect(() => {
-  }, [user, loading, error])
+  // Add mutex for token refresh
+  const refreshTokenPromise = useRef<Promise<any> | null>(null)
+  const initialLoadComplete = useRef(false)
 
   useEffect(() => {
+    // Check for token immediately
+    const token = Cookies.get("token")
+    if (!token) {
+      setLoading(false)
+      initialLoadComplete.current = true
+      return
+    }
     fetchUser()
   }, [])
 
-  const fetchUser = async () => {
-    const token = getStoredToken()
+  const refreshTokenIfNeeded = async () => {
+    try {
+      // If already refreshing, wait for that to complete
+      if (refreshTokenPromise.current) {
+        return refreshTokenPromise.current
+      }
+
+      const refreshToken = Cookies.get("refreshToken")
+      if (!refreshToken) {
+        throw new Error("No refresh token available")
+      }
+
+      setIsRefreshing(true)
+      // Create new promise for this refresh attempt
+      refreshTokenPromise.current = fetch(`${API_URL}/api/users/refresh-token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }).then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to refresh token")
+        }
+        const data = await response.json()
+        Cookies.set("token", data.access_token, {
+          expires: 1,
+          path: "/",
+          sameSite: "lax",
+        })
+        Cookies.set("refreshToken", data.refresh_token, {
+          expires: 2,
+          path: "/",
+          sameSite: "lax",
+        })
+        return data
+      })
+
+      await refreshTokenPromise.current
+      return true
+    } catch (error) {
+      console.error("Error refreshing token:", error)
+      // Only clear user state if this is not an initial load
+      if (initialLoadComplete.current) {
+        Cookies.remove("token")
+        Cookies.remove("refreshToken")
+        setUser(null)
+        router.push("/login")
+      }
+      throw error
+    } finally {
+      setIsRefreshing(false)
+      refreshTokenPromise.current = null
+    }
+  }
+
+  const fetchUser = async (retried = false) => {
+    const token = Cookies.get("token")
     if (!token) {
-      setUser(null)
+      if (initialLoadComplete.current) {
+        setUser(null)
+      }
       setLoading(false)
       return
     }
 
-    setLoading(true)
-    setError(null)
     try {
       const response = await fetch(`${API_URL}/api/users/me`, {
         headers: {
@@ -71,41 +128,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!response.ok) {
-        if (response.status === 401) {
-          Cookies.remove("token")
-          setUser(null)
-          return
+        if (response.status === 401 && !retried) {
+          // Try to refresh the token
+          await refreshTokenIfNeeded()
+          // Retry the request with the new token
+          return fetchUser(true)
         }
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const userData = await response.json()
       setUser(userData)
+      initialLoadComplete.current = true
     } catch (error) {
       console.error("Error fetching user data:", error)
-      setError("Failed to fetch user data. Please try logging in again.")
-      setUser(null)
-      Cookies.remove("token")
+      if (initialLoadComplete.current) {
+        setError("Failed to fetch user data. Please try logging in again.")
+        setUser(null)
+        Cookies.remove("token")
+        Cookies.remove("refreshToken")
+        router.push("/login")
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  const login = async (token: string) => {
+  const login = async (token: string, refreshToken: string) => {
     setLoading(true)
     setError(null)
     try {
-      if (!token) {
-        throw new Error("No token provided")
+
+      if (!token || !refreshToken) {
+        console.error("Missing tokens:", { token: !!token, refreshToken: !!refreshToken })
+        throw new Error("No tokens provided")
       }
-      // Set token in cookie with HTTP-only flag
+
+      console.log("Setting cookies...")
+      // Set tokens in cookies
       Cookies.set("token", token, {
-        expires: 7, // 7 days
+        expires: 1, // 1 day
         path: "/",
         sameSite: "lax",
       })
-      await fetchUser()
+      Cookies.set("refreshToken", refreshToken, {
+        expires: 2, // 2 days
+        path: "/",
+        sameSite: "lax",
+      })
 
+      console.log("Fetching user data...")
+      await fetchUser()
       // Get the redirect path from URL or default to root
       const from = searchParams.get("from") || "/"
       router.push(from)
@@ -113,10 +186,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       toast.success("Successfully logged in!")
     } catch (error) {
-      console.error("Error during login:", error)
       setError("Login failed. Please try again.")
       toast.error("Login failed. Please try again.")
       Cookies.remove("token")
+      Cookies.remove("refreshToken")
     } finally {
       setLoading(false)
     }
@@ -126,6 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("Logging out")
       Cookies.remove("token")
+      Cookies.remove("refreshToken")
       setUser(null)
       setError(null)
       router.push("/")

@@ -4,10 +4,21 @@ import type { NextRequest } from "next/server"
 // Add routes that don't require authentication
 const publicRoutes = ["/", "/login", "/register", "/landing"]
 
+// Add routes that should bypass token check
+const bypassRoutes = [
+  "/api/users/refresh-token",
+  "/_next",
+  "/favicon.ico",
+  "/static",
+]
+
 export function middleware(request: NextRequest) {
-  // Check for token in cookie
-  const token = request.cookies.get("token")?.value
   const { pathname } = request.nextUrl
+
+  // Allow bypass routes
+  if (bypassRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.next()
+  }
 
   // Allow public routes
   if (publicRoutes.some(route => pathname === route || pathname.startsWith(`${route}/`))) {
@@ -20,16 +31,21 @@ export function middleware(request: NextRequest) {
   }
 
   // Allow static files and images
-  if (
-    pathname.includes(".") || // Has file extension
-    pathname.startsWith("/_next/") || // Next.js internal
-    pathname.startsWith("/favicon.ico")
-  ) {
+  if (pathname.includes(".")) {
     return NextResponse.next()
   }
 
-  // Redirect to login if no token
-  if (!token) {
+  // Check for token in cookie
+  const token = request.cookies.get("token")?.value
+  const refreshToken = request.cookies.get("refreshToken")?.value
+
+  // If no token but has refresh token, let the client handle the refresh
+  if (!token && refreshToken) {
+    return NextResponse.next()
+  }
+
+  // Redirect to login if no token and no refresh token
+  if (!token && !refreshToken) {
     const url = new URL("/login", request.url)
     url.searchParams.set("from", pathname)
     return NextResponse.redirect(url)
@@ -37,7 +53,9 @@ export function middleware(request: NextRequest) {
 
   // Add token to Authorization header for API requests
   const requestHeaders = new Headers(request.headers)
-  requestHeaders.set("Authorization", `Bearer ${token}`)
+  if (token) {
+    requestHeaders.set("Authorization", `Bearer ${token}`)
+  }
 
   return NextResponse.next({
     request: {

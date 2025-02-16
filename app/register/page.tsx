@@ -135,7 +135,13 @@ export default function RegisterPage() {
         throw new Error(data.message || "Invalid OTP")
       }
 
-      await login(data.access_token)
+      // Extract both tokens and pass them to login
+      const { access_token, refresh_token } = data
+      if (!access_token || !refresh_token) {
+        throw new Error("Invalid token response from server")
+      }
+
+      await login(access_token, refresh_token)
       toast.success("Email verified successfully")
       router.push("/")
     } catch (error) {

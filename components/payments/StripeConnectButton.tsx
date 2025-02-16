@@ -6,15 +6,18 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Check } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
 
 interface StripeConnectButtonProps {
   isConnected?: boolean
   onConnectionChange?: (connected: boolean) => void
+  organizationId: string
 }
 
 export default function StripeConnectButton({
   isConnected = false,
-  onConnectionChange = () => {}
+  onConnectionChange = () => {},
+  organizationId,
 }: StripeConnectButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [connected, setConnected] = useState(isConnected)
@@ -46,16 +49,16 @@ export default function StripeConnectButton({
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem("stripe_connect_success")
       }
-      const response = await fetch("/api/stripe/connect", {
-        method: "POST",
+
+      const response = await apiClient.stripe.connect({
+        organizationId,
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to connect to Stripe")
+      if (response.onboardingUrl) {
+        window.location.href = response.onboardingUrl
+      } else {
+        throw new Error("No onboarding URL received")
       }
-
-      const { url } = await response.json()
-      window.location.href = url
     } catch (error) {
       console.error("Error connecting to Stripe:", error)
       toast.error("Failed to connect to Stripe")

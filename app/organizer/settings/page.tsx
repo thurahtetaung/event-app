@@ -58,6 +58,13 @@ export default function OrganizerSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isResetting, setIsResetting] = useState(false)
   const [activeTab, setActiveTab] = useState("profile")
+  const [organization, setOrganization] = useState<{ id: string } | null>(null)
+  const [stripeStatus, setStripeStatus] = useState<{
+    isConnected: boolean;
+    accountId?: string;
+    payoutsEnabled?: boolean;
+    detailsSubmitted?: boolean;
+  } | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -86,24 +93,42 @@ export default function OrganizerSettingsPage() {
     }
   }, [searchParams])
 
-  // Fetch organization data
+  // Fetch organization data and Stripe status
   async function fetchOrganization() {
     try {
-      const data = await apiClient.organizations.getCurrent() as OrganizationData
-      console.log("Raw organization data:", data)
+      setIsLoading(true)
+      // Fetch organization data
+      const data = await apiClient.organizations.getCurrent()
+
+      if (!data) {
+        throw new Error("No organization data received")
+      }
+
       let eventTypes: string[] = []
       try {
         eventTypes = JSON.parse(data.eventTypes)
-        console.log("Parsed event types:", eventTypes)
         if (!Array.isArray(eventTypes)) {
-          console.log("Event types is not an array, resetting to empty array")
           eventTypes = []
         }
       } catch (e) {
         console.error('Error parsing event types:', e)
+        eventTypes = []
       }
 
-      console.log("Setting form values with event types:", eventTypes)
+      let socialLinks = {
+        facebook: "",
+        instagram: "",
+        twitter: "",
+        linkedin: "",
+      }
+      try {
+        socialLinks = data.socialLinks ? JSON.parse(data.socialLinks) : socialLinks
+      } catch (e) {
+        console.error('Error parsing social links:', e)
+      }
+
+      setOrganization({ id: data.id })
+
       form.reset({
         name: data.name,
         organizationType: data.organizationType,
@@ -112,19 +137,33 @@ export default function OrganizerSettingsPage() {
         eventTypes,
         phoneNumber: data.phoneNumber || "",
         address: data.address,
-        socialLinks: data.socialLinks ? JSON.parse(data.socialLinks) : {
-          facebook: "",
-          instagram: "",
-          twitter: "",
-          linkedin: "",
-        },
+        socialLinks,
       }, {
         keepDefaultValues: false,
         keepDirtyValues: false,
       })
-    } catch (error) {
+
+      // Fetch Stripe status in parallel if we have an organization ID
+      if (data.id) {
+        apiClient.stripe.getStatus(data.id)
+          .then(stripeStatusData => {
+            setStripeStatus(stripeStatusData)
+          })
+          .catch(error => {
+            console.error("Error fetching Stripe status:", error)
+            setStripeStatus(null)
+          })
+      }
+    } catch (error: any) {
       console.error("Error fetching organization:", error)
-      toast.error("Failed to load organization data")
+      if (error.message.includes('Network error')) {
+        toast.error("Network error. Please check your connection and try again.")
+      } else if (error.message.includes('No organization found')) {
+        toast.error("Organization not found. Please contact support if this persists.")
+      } else if (!error.message.includes('Request was cancelled')) {
+        // Don't show error toast for cancelled requests
+        toast.error(error.message || "Failed to load organization data")
+      }
     } finally {
       setIsLoading(false)
       setIsResetting(false)
@@ -133,7 +172,7 @@ export default function OrganizerSettingsPage() {
 
   useEffect(() => {
     fetchOrganization()
-  }, [form])
+  }, [])
 
   const handleReset = async () => {
     setIsResetting(true)
@@ -158,250 +197,278 @@ export default function OrganizerSettingsPage() {
     }
   }
 
+  const handleStripeConnectionChange = (connected: boolean) => {
+    setStripeStatus(prev => prev ? { ...prev, isConnected: connected } : { isConnected: connected })
+  }
+
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
-          <p className="text-muted-foreground">
-            Manage your organization profile and preferences
-          </p>
+    <div className="min-h-screen bg-background">
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+            <p className="text-muted-foreground">
+              Manage your organization profile and preferences
+            </p>
+          </div>
         </div>
-      </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-        </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="payments">Payments</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="profile" className="space-y-4">
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <TabsContent value="profile" className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Organization Profile</CardTitle>
+                  <CardDescription>
+                    Update your organization details
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="name">Organization Name</Label>
+                      <Input
+                        id="name"
+                        {...form.register("name")}
+                        placeholder="Your organization name"
+                      />
+                      {form.formState.errors.name && (
+                        <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="organizationType">Organization Type</Label>
+                      <Select
+                        defaultValue={form.watch("organizationType")}
+                        onValueChange={(value) => form.setValue("organizationType", value as "company" | "individual" | "non_profit", { shouldValidate: true })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select organization type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ORGANIZATION_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {form.formState.errors.organizationType && (
+                        <p className="text-sm text-destructive">{form.formState.errors.organizationType.message}</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        {...form.register("description")}
+                        placeholder="Describe your organization"
+                      />
+                      {form.formState.errors.description && (
+                        <p className="text-sm text-destructive">{form.formState.errors.description.message}</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="website">Website</Label>
+                      <Input
+                        id="website"
+                        type="url"
+                        {...form.register("website")}
+                        placeholder="https://example.com"
+                      />
+                      {form.formState.errors.website && (
+                        <p className="text-sm text-destructive">{form.formState.errors.website.message}</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label>Event Types</Label>
+                      <MultiSelect
+                        options={EVENT_TYPES}
+                        value={form.watch("eventTypes")}
+                        onValueChange={(selected) => {
+                          console.log("MultiSelect onValueChange - selected:", selected)
+                          console.log("Current form event types:", form.getValues("eventTypes"))
+                          form.setValue("eventTypes", selected, { shouldValidate: true })
+                        }}
+                        placeholder="Select event types"
+                        variant="outline"
+                      />
+                      {form.formState.errors.eventTypes && (
+                        <p className="text-sm text-destructive">{form.formState.errors.eventTypes.message}</p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Contact Information</CardTitle>
+                  <CardDescription>
+                    Update your contact details
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="phoneNumber">Phone Number</Label>
+                      <Input
+                        id="phoneNumber"
+                        {...form.register("phoneNumber")}
+                        placeholder="+1234567890"
+                      />
+                      {form.formState.errors.phoneNumber && (
+                        <p className="text-sm text-destructive">{form.formState.errors.phoneNumber.message}</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="address">Address</Label>
+                      <Textarea
+                        id="address"
+                        {...form.register("address")}
+                        placeholder="Your organization's address"
+                      />
+                      {form.formState.errors.address && (
+                        <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Social Media Links</CardTitle>
+                  <CardDescription>
+                    Connect your social media profiles
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="facebook">Facebook</Label>
+                      <Input
+                        id="facebook"
+                        type="url"
+                        {...form.register("socialLinks.facebook")}
+                        placeholder="https://facebook.com/yourpage"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="instagram">Instagram</Label>
+                      <Input
+                        id="instagram"
+                        type="url"
+                        {...form.register("socialLinks.instagram")}
+                        placeholder="https://instagram.com/yourprofile"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="twitter">Twitter</Label>
+                      <Input
+                        id="twitter"
+                        type="url"
+                        {...form.register("socialLinks.twitter")}
+                        placeholder="https://twitter.com/yourhandle"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="linkedin">LinkedIn</Label>
+                      <Input
+                        id="linkedin"
+                        type="url"
+                        {...form.register("socialLinks.linkedin")}
+                        placeholder="https://linkedin.com/company/yourcompany"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex justify-end gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleReset}
+                  disabled={isLoading || isResetting}
+                >
+                  {isResetting ? "Resetting..." : "Undo Changes"}
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="payments" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Organization Profile</CardTitle>
+                <CardTitle>Payment Settings</CardTitle>
                 <CardDescription>
-                  Update your organization details
+                  Connect your Stripe account to receive payments
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">Organization Name</Label>
-                    <Input
-                      id="name"
-                      {...form.register("name")}
-                      placeholder="Your organization name"
-                    />
-                    {form.formState.errors.name && (
-                      <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-                    )}
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="organizationType">Organization Type</Label>
-                    <Select
-                      defaultValue={form.watch("organizationType")}
-                      onValueChange={(value) => form.setValue("organizationType", value as "company" | "individual" | "non_profit", { shouldValidate: true })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select organization type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ORGANIZATION_TYPES.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {form.formState.errors.organizationType && (
-                      <p className="text-sm text-destructive">{form.formState.errors.organizationType.message}</p>
-                    )}
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      {...form.register("description")}
-                      placeholder="Describe your organization"
-                    />
-                    {form.formState.errors.description && (
-                      <p className="text-sm text-destructive">{form.formState.errors.description.message}</p>
-                    )}
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="website">Website</Label>
-                    <Input
-                      id="website"
-                      type="url"
-                      {...form.register("website")}
-                      placeholder="https://example.com"
-                    />
-                    {form.formState.errors.website && (
-                      <p className="text-sm text-destructive">{form.formState.errors.website.message}</p>
-                    )}
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label>Event Types</Label>
-                    <MultiSelect
-                      options={EVENT_TYPES}
-                      value={form.watch("eventTypes")}
-                      onValueChange={(selected) => {
-                        console.log("MultiSelect onValueChange - selected:", selected)
-                        console.log("Current form event types:", form.getValues("eventTypes"))
-                        form.setValue("eventTypes", selected, { shouldValidate: true })
-                      }}
-                      placeholder="Select event types"
-                      variant="outline"
-                    />
-                    {form.formState.errors.eventTypes && (
-                      <p className="text-sm text-destructive">{form.formState.errors.eventTypes.message}</p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Contact Information</CardTitle>
-                <CardDescription>
-                  Update your contact details
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="phoneNumber">Phone Number</Label>
-                    <Input
-                      id="phoneNumber"
-                      {...form.register("phoneNumber")}
-                      placeholder="+1234567890"
-                    />
-                    {form.formState.errors.phoneNumber && (
-                      <p className="text-sm text-destructive">{form.formState.errors.phoneNumber.message}</p>
-                    )}
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Textarea
-                      id="address"
-                      {...form.register("address")}
-                      placeholder="Your organization's address"
-                    />
-                    {form.formState.errors.address && (
-                      <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Social Media Links</CardTitle>
-                <CardDescription>
-                  Connect your social media profiles
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="facebook">Facebook</Label>
-                    <Input
-                      id="facebook"
-                      type="url"
-                      {...form.register("socialLinks.facebook")}
-                      placeholder="https://facebook.com/yourpage"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="instagram">Instagram</Label>
-                    <Input
-                      id="instagram"
-                      type="url"
-                      {...form.register("socialLinks.instagram")}
-                      placeholder="https://instagram.com/yourprofile"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="twitter">Twitter</Label>
-                    <Input
-                      id="twitter"
-                      type="url"
-                      {...form.register("socialLinks.twitter")}
-                      placeholder="https://twitter.com/yourhandle"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="linkedin">LinkedIn</Label>
-                    <Input
-                      id="linkedin"
-                      type="url"
-                      {...form.register("socialLinks.linkedin")}
-                      placeholder="https://linkedin.com/company/yourcompany"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-end gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleReset}
-                disabled={isLoading || isResetting}
-              >
-                {isResetting ? "Resetting..." : "Undo Changes"}
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </form>
-        </TabsContent>
-
-        <TabsContent value="payments" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Settings</CardTitle>
-              <CardDescription>
-                Connect your Stripe account to receive payments
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex flex-col gap-4 rounded-lg border p-4">
-                  <div>
-                    <h4 className="font-medium">Stripe Connect Status</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Connect your Stripe account to start receiving payments for your events
-                    </p>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-4 rounded-lg border p-4">
+                    <div>
+                      <h4 className="font-medium">Stripe Connect Status</h4>
                       <p className="text-sm text-muted-foreground">
-                        Connect your Stripe account to receive payments from ticket sales
+                        Connect your Stripe account to start receiving payments for your events
                       </p>
                     </div>
-                    <StripeConnectButton />
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        {stripeStatus?.isConnected ? (
+                          <>
+                            <p className="text-sm font-medium">Account Status</p>
+                            <p className="text-sm text-muted-foreground">
+                              {stripeStatus.detailsSubmitted
+                                ? "Your Stripe account is fully set up"
+                                : "Please complete your Stripe account setup"}
+                            </p>
+                            {stripeStatus.payoutsEnabled && (
+                              <p className="text-sm text-green-600 dark:text-green-400">
+                                Ready to receive payments
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Connect your Stripe account to receive payments from ticket sales
+                          </p>
+                        )}
+                      </div>
+                      {organization && (
+                        <StripeConnectButton
+                          isConnected={stripeStatus?.isConnected}
+                          onConnectionChange={handleStripeConnectionChange}
+                          organizationId={organization.id}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

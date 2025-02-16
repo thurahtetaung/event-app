@@ -26,74 +26,132 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Label } from "@/components/ui/label"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useState } from "react"
+import { toast } from "sonner"
+import { apiClient } from "@/lib/api-client"
+import { useRouter } from "next/navigation"
+import type { EventData } from "@/lib/api-client"
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  description: z.string().min(1, "Description is required"),
-  date: z.date({
-    required_error: "Date is required",
-  }),
+  description: z.string().optional(),
+  date: z.date(),
   startTime: z.object({
-    hour: z.string().min(1, "Hour is required"),
-    minute: z.string().min(1, "Minute is required"),
+    hour: z.string(),
+    minute: z.string(),
   }),
   endTime: z.object({
-    hour: z.string().min(1, "Hour is required"),
-    minute: z.string().min(1, "Minute is required"),
+    hour: z.string(),
+    minute: z.string(),
   }),
-  location: z.string().min(1, "Location is required"),
-  capacity: z.string().min(1, "Capacity is required"),
-  isPublic: z.boolean().default(true),
-  requiresApproval: z.boolean().default(false),
-  allowWaitlist: z.boolean().default(true),
-})
+  venue: z.string().nullable(),
+  address: z.string().nullable(),
+  category: z.string(),
+  isOnline: z.boolean(),
+  capacity: z.number().min(1),
+  coverImage: z.string().optional(),
+  status: z.enum(["draft", "published", "cancelled"]).optional(),
+}).refine((data) => {
+  // If it's not an online event, venue and address are required
+  if (!data.isOnline) {
+    if (!data.venue) return false;
+    if (!data.address) return false;
+  }
+  return true;
+}, {
+  message: "Venue and address are required for in-person events",
+  path: ["venue"],
+});
 
 interface EventSettingsProps {
   event: {
     id: string
     title: string
     description: string
-    date: Date
-    startTime?: {
-      hour: string
-      minute: string
-    }
-    endTime?: {
-      hour: string
-      minute: string
-    }
-    location: string
+    startTimestamp: string
+    endTimestamp: string
+    venue: string | null
+    address: string | null
+    category: string
+    isOnline: boolean
     capacity: number
+    coverImage?: string
+    status: "draft" | "published" | "cancelled"
   }
+  onSuccess?: (event: Partial<EventData>) => void
 }
 
-export function EventSettings({ event }: EventSettingsProps) {
+const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"))
+const minutes = ["00", "15", "30", "45"]
+
+export function EventSettings({ event, onSuccess }: EventSettingsProps) {
+  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: event.title,
       description: event.description,
-      date: event.date,
-      startTime: event.startTime || {
-        hour: "12",
-        minute: "00",
+      date: new Date(event.startTimestamp),
+      startTime: {
+        hour: format(new Date(event.startTimestamp), "HH"),
+        minute: format(new Date(event.startTimestamp), "mm"),
       },
-      endTime: event.endTime || {
-        hour: "13",
-        minute: "00",
+      endTime: {
+        hour: format(new Date(event.endTimestamp), "HH"),
+        minute: format(new Date(event.endTimestamp), "mm"),
       },
-      location: event.location,
-      capacity: String(event.capacity),
-      isPublic: true,
-      requiresApproval: false,
-      allowWaitlist: true,
+      venue: event.venue,
+      address: event.address,
+      category: event.category,
+      isOnline: event.isOnline,
+      capacity: event.capacity,
+      coverImage: event.coverImage,
+      status: event.status,
     },
   })
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // Add API call to update event settings
-    console.log(values)
-  }
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    try {
+      setIsLoading(true);
+      const startTimestamp = new Date(
+        `${data.date.toISOString().split('T')[0]}T${data.startTime.hour}:${data.startTime.minute}:00`
+      ).toISOString();
+      const endTimestamp = new Date(
+        `${data.date.toISOString().split('T')[0]}T${data.endTime.hour}:${data.endTime.minute}:00`
+      ).toISOString();
+
+      const eventData: Partial<EventData> = {
+        title: data.title,
+        description: data.description,
+        startTimestamp,
+        endTimestamp,
+        venue: data.venue,
+        address: data.address,
+        category: data.category,
+        isOnline: data.isOnline,
+        capacity: data.capacity,
+        status: data.status,
+      };
+
+      await apiClient.events.update(event.id, eventData);
+      toast.success('Event updated successfully');
+      router.refresh();
+      onSuccess?.(eventData);
+    } catch (error) {
+      console.error('Error updating event:', error);
+      toast.error('Failed to update event');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <Form {...form}>
@@ -119,6 +177,7 @@ export function EventSettings({ event }: EventSettingsProps) {
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
               name="description"
@@ -132,6 +191,7 @@ export function EventSettings({ event }: EventSettingsProps) {
                 </FormItem>
               )}
             />
+
             <div className="grid gap-6">
               <div className="space-y-2">
                 <Label>Date</Label>
@@ -174,39 +234,32 @@ export function EventSettings({ event }: EventSettingsProps) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Start Time</Label>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <Select
                       value={form.watch("startTime.hour")}
-                      onValueChange={(hour) => {
-                        form.setValue("startTime.hour", hour, { shouldValidate: true });
-                      }}
+                      onValueChange={(value) => form.setValue("startTime.hour", value, { shouldValidate: true })}
                     >
-                      <SelectTrigger className="w-[110px]">
-                        <SelectValue placeholder="Hour" />
+                      <SelectTrigger className="w-[70px]">
+                        <SelectValue placeholder="HH" />
                       </SelectTrigger>
                       <SelectContent className="h-[200px]">
-                        {Array.from({ length: 24 }, (_, i) => {
-                          const hour = i.toString().padStart(2, "0")
-                          return (
-                            <SelectItem key={hour} value={hour}>
-                              {hour}:00
-                            </SelectItem>
-                          )
-                        })}
+                        {hours.map((hour) => (
+                          <SelectItem key={hour} value={hour}>
+                            {hour}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <span className="flex items-center">:</span>
                     <Select
                       value={form.watch("startTime.minute")}
-                      onValueChange={(minute) => {
-                        form.setValue("startTime.minute", minute, { shouldValidate: true });
-                      }}
+                      onValueChange={(value) => form.setValue("startTime.minute", value, { shouldValidate: true })}
                     >
-                      <SelectTrigger className="w-[110px]">
-                        <SelectValue placeholder="Minute" />
+                      <SelectTrigger className="w-[70px]">
+                        <SelectValue placeholder="MM" />
                       </SelectTrigger>
                       <SelectContent>
-                        {["00", "15", "30", "45"].map((minute) => (
+                        {minutes.map((minute) => (
                           <SelectItem key={minute} value={minute}>
                             {minute}
                           </SelectItem>
@@ -217,39 +270,32 @@ export function EventSettings({ event }: EventSettingsProps) {
                 </div>
                 <div className="space-y-2">
                   <Label>End Time</Label>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <Select
                       value={form.watch("endTime.hour")}
-                      onValueChange={(hour) => {
-                        form.setValue("endTime.hour", hour, { shouldValidate: true });
-                      }}
+                      onValueChange={(value) => form.setValue("endTime.hour", value, { shouldValidate: true })}
                     >
-                      <SelectTrigger className="w-[110px]">
-                        <SelectValue placeholder="Hour" />
+                      <SelectTrigger className="w-[70px]">
+                        <SelectValue placeholder="HH" />
                       </SelectTrigger>
                       <SelectContent className="h-[200px]">
-                        {Array.from({ length: 24 }, (_, i) => {
-                          const hour = i.toString().padStart(2, "0")
-                          return (
-                            <SelectItem key={hour} value={hour}>
-                              {hour}:00
-                            </SelectItem>
-                          )
-                        })}
+                        {hours.map((hour) => (
+                          <SelectItem key={hour} value={hour}>
+                            {hour}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <span className="flex items-center">:</span>
                     <Select
                       value={form.watch("endTime.minute")}
-                      onValueChange={(minute) => {
-                        form.setValue("endTime.minute", minute, { shouldValidate: true });
-                      }}
+                      onValueChange={(value) => form.setValue("endTime.minute", value, { shouldValidate: true })}
                     >
-                      <SelectTrigger className="w-[110px]">
-                        <SelectValue placeholder="Minute" />
+                      <SelectTrigger className="w-[70px]">
+                        <SelectValue placeholder="MM" />
                       </SelectTrigger>
                       <SelectContent>
-                        {["00", "15", "30", "45"].map((minute) => (
+                        {minutes.map((minute) => (
                           <SelectItem key={minute} value={minute}>
                             {minute}
                           </SelectItem>
@@ -260,19 +306,66 @@ export function EventSettings({ event }: EventSettingsProps) {
                 </div>
               </div>
             </div>
+
             <FormField
               control={form.control}
-              name="location"
+              name="isOnline"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Location</FormLabel>
+                <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Online Event</FormLabel>
+                    <FormDescription>
+                      This event will be hosted online
+                    </FormDescription>
+                  </div>
                   <FormControl>
-                    <Input {...field} />
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
                   </FormControl>
-                  <FormMessage />
                 </FormItem>
               )}
             />
+
+            {!form.watch("isOnline") && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="venue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Venue</FormLabel>
+                      <FormControl>
+                        <Input {...field} value={field.value || ''} placeholder="Enter venue name" />
+                      </FormControl>
+                      <FormDescription>
+                        The name of the venue where the event will be held
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} value={field.value || ''} placeholder="Enter venue address" />
+                      </FormControl>
+                      <FormDescription>
+                        The full address of the venue
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
             <FormField
               control={form.control}
               name="capacity"
@@ -280,7 +373,12 @@ export function EventSettings({ event }: EventSettingsProps) {
                 <FormItem>
                   <FormLabel>Capacity</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} />
+                    <Input
+                      type="number"
+                      min={1}
+                      {...field}
+                      value={field.value}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -291,76 +389,79 @@ export function EventSettings({ event }: EventSettingsProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Event Settings</CardTitle>
+            <CardTitle>Advanced Settings</CardTitle>
             <CardDescription>
-              Configure additional event settings
+              Advanced features like event visibility, registration approval, and waitlist management are coming soon in a future update.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
-            <FormField
-              control={form.control}
-              name="isPublic"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Public Event</FormLabel>
-                    <FormDescription>
-                      Make this event visible to everyone
-                    </FormDescription>
-                  </div>
-                  <FormControl>
+            <TooltipProvider>
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Public Event</Label>
+                  <p className="text-muted-foreground">Make this event visible to everyone</p>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger>
                     <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
+                      checked={false}
+                      onCheckedChange={() => {}}
+                      disabled
+                      className="data-[state=checked]:bg-muted-foreground"
                     />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="requiresApproval"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Require Approval</FormLabel>
-                    <FormDescription>
-                      Manually approve registrations
-                    </FormDescription>
-                  </div>
-                  <FormControl>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Coming soon</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Require Approval</Label>
+                  <p className="text-muted-foreground">Manually approve attendee registrations</p>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger>
                     <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
+                      checked={false}
+                      onCheckedChange={() => {}}
+                      disabled
+                      className="data-[state=checked]:bg-muted-foreground"
                     />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="allowWaitlist"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Enable Waitlist</FormLabel>
-                    <FormDescription>
-                      Allow users to join a waitlist when event is full
-                    </FormDescription>
-                  </div>
-                  <FormControl>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Coming soon</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Enable Waitlist</Label>
+                  <p className="text-muted-foreground">Allow attendees to join a waitlist when tickets are sold out</p>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger>
                     <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
+                      checked={false}
+                      onCheckedChange={() => {}}
+                      disabled
+                      className="data-[state=checked]:bg-muted-foreground"
                     />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Coming soon</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           </CardContent>
         </Card>
 
-        <Button type="submit">Save Changes</Button>
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? "Saving..." : "Save Changes"}
+        </Button>
       </form>
     </Form>
   )

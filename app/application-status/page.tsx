@@ -24,23 +24,35 @@ export default function ApplicationStatusPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchApplicationStatus() {
       try {
         const data = await apiClient.organizerApplications.getByUserId()
-        setApplications(data as ApplicationStatus[])
-      } catch (error) {
-        if (error instanceof Error && error.message.includes("No organizer application found")) {
-          router.push("/become-organizer")
-        } else {
-          setError(error instanceof Error ? error.message : "Failed to fetch application status")
+        if (isMounted) {
+          setApplications(data as ApplicationStatus[])
+        }
+      } catch (error: unknown) {
+        if (isMounted) {
+          if (error instanceof Error && error.message.includes("No organizer application found")) {
+            router.push("/become-organizer")
+          } else if (error instanceof Error && !error.message.includes('Request was cancelled')) {
+            setError(error.message || "Failed to fetch application status")
+          }
         }
       } finally {
-        setIsLoading(false)
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
     }
 
     if (user) {
       fetchApplicationStatus()
+    }
+
+    return () => {
+      isMounted = false
     }
   }, [user, router])
 

@@ -13,19 +13,31 @@ export default function ApplicationsPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchApplications() {
       try {
         const data = await apiClient.organizerApplications.getAll()
-        setApplications(data as Application[])
+        if (isMounted) {
+          setApplications(data as Application[])
+        }
       } catch (error) {
-        console.error("Error fetching applications:", error)
-        toast.error("Failed to load applications")
+        if (error instanceof Error && !error.message.includes('Request was cancelled')) {
+          console.error("Error fetching applications:", error)
+          toast.error("Failed to load applications")
+        }
       } finally {
-        setIsLoading(false)
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
     }
 
     fetchApplications()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   if (isLoading) {

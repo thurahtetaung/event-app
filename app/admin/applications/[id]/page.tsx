@@ -59,20 +59,32 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false)
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchApplication() {
       try {
         const data = await apiClient.organizerApplications.getById(params.id)
-        setApplication(data as ApplicationDetails)
+        if (isMounted) {
+          setApplication(data as ApplicationDetails)
+        }
       } catch (error) {
-        console.error("Error fetching application:", error)
-        toast.error("Failed to load application details")
-        router.push("/admin/applications")
+        if (isMounted && error instanceof Error && !error.message.includes('Request was cancelled')) {
+          console.error("Error fetching application:", error)
+          toast.error("Failed to load application details")
+          router.push("/admin/applications")
+        }
       } finally {
-        setIsLoading(false)
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
     }
 
     fetchApplication()
+
+    return () => {
+      isMounted = false
+    }
   }, [params.id, router])
 
   const handleApprove = async () => {
