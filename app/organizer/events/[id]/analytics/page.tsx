@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -11,21 +12,35 @@ import {
   TrendingUp,
   CalendarDays,
   DollarSign,
+  Loader2,
 } from "lucide-react"
 import { EventRevenueChart } from "@/components/organizer/EventRevenueChart"
 import { EventTicketSalesChart } from "@/components/organizer/EventTicketSalesChart"
 import { EventAttendeeChart } from "@/components/organizer/EventAttendeeChart"
 import { AttendeeLocationChart } from "@/components/organizer/AttendeeLocationChart"
 import { TicketTypeDistributionChart } from "@/components/organizer/TicketTypeDistributionChart"
-import { TicketTimelineChart } from "@/components/organizer/TicketTimelineChart"
+import { TicketInventoryChart } from "@/components/organizer/TicketInventoryChart"
 import { DailySalesChart } from "@/components/organizer/DailySalesChart"
+import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner"
 
-// Mock data - replace with API call in production
-const eventStats = {
-  totalAttendees: "842",
-  totalRevenue: "$12,458.89",
-  ticketsSold: "923",
-  averageTicketPrice: "$89.99",
+interface EventAnalytics {
+  totalTicketsSold: number
+  totalRevenue: number
+  ticketTypeStats: Array<{
+    id: string
+    name: string
+    type: "paid" | "free"
+    totalSold: number
+    totalRevenue: number
+    status: "on-sale" | "paused" | "sold-out" | "scheduled"
+    quantity: number
+  }>
+  salesByDay: Array<{
+    date: string
+    count: number
+    revenue: number
+  }>
 }
 
 interface EventAnalyticsPageProps {
@@ -35,32 +50,76 @@ interface EventAnalyticsPageProps {
 }
 
 export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState("overview")
+  const [analytics, setAnalytics] = useState<EventAnalytics | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchAnalytics() {
+      try {
+        const data = await apiClient.events.getAnalytics(params.id)
+        if (isMounted) {
+          setAnalytics(data as EventAnalytics)
+        }
+      } catch (error) {
+        if (error instanceof Error && !error.message.includes('Request was cancelled')) {
+          console.error("Error fetching analytics:", error)
+          toast.error("Failed to load analytics data")
+          router.push(`/organizer/events/${params.id}`)
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    fetchAnalytics()
+
+    return () => {
+      isMounted = false
+    }
+  }, [params.id, router])
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 p-8 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
+  }
+
+  if (!analytics) return null
 
   const stats = [
     {
-      name: "Total Attendees",
-      value: eventStats.totalAttendees,
-      description: "+20% from last week",
-      icon: Users,
-    },
-    {
-      name: "Total Revenue",
-      value: eventStats.totalRevenue,
-      description: "+15% from last week",
-      icon: BadgeDollarSign,
-    },
-    {
-      name: "Tickets Sold",
-      value: eventStats.ticketsSold,
-      description: "+12% from last week",
+      name: "Total Tickets Sold",
+      value: analytics.totalTicketsSold.toString(),
+      description: "Total tickets sold",
       icon: Ticket,
     },
     {
-      name: "Average Ticket Price",
-      value: eventStats.averageTicketPrice,
-      description: "Per ticket",
+      name: "Total Revenue",
+      value: `$${analytics.totalRevenue.toFixed(2)}`,
+      description: "Total revenue generated",
       icon: BadgeDollarSign,
+    },
+    {
+      name: "Average Price",
+      value: analytics.totalTicketsSold > 0
+        ? `$${(analytics.totalRevenue / analytics.totalTicketsSold).toFixed(2)}`
+        : "$0.00",
+      description: "Per ticket",
+      icon: DollarSign,
+    },
+    {
+      name: "Ticket Types",
+      value: analytics.ticketTypeStats.length.toString(),
+      description: "Different ticket types",
+      icon: Ticket,
     },
   ]
 
@@ -91,10 +150,9 @@ export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) 
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stat.value}</div>
-                <div className="flex items-center text-xs text-muted-foreground">
-                  <TrendingUp className="mr-1 h-3 w-3 text-green-500" />
-                  <span>{stat.description}</span>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  {stat.description}
+                </p>
               </CardContent>
             </Card>
           )
@@ -105,67 +163,120 @@ export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) 
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tickets">Tickets</TabsTrigger>
-          <TabsTrigger value="attendees">Attendees</TabsTrigger>
+          <TabsTrigger value="sales">Sales</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card className="col-span-2">
               <CardHeader>
-                <CardTitle>Revenue</CardTitle>
+                <CardTitle>Revenue Over Time</CardTitle>
               </CardHeader>
               <CardContent>
-                <EventRevenueChart eventId={params.id} />
+                <DailySalesChart data={analytics.salesByDay} />
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Ticket Sales</CardTitle>
+                <CardTitle>Ticket Type Distribution</CardTitle>
               </CardHeader>
               <CardContent>
-                <EventTicketSalesChart eventId={params.id} />
+                <TicketTypeDistributionChart data={analytics.ticketTypeStats} />
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
         <TabsContent value="tickets" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4">
             <Card>
               <CardHeader>
-                <CardTitle>Sales Timeline</CardTitle>
+                <CardTitle>Ticket Types Performance</CardTitle>
               </CardHeader>
               <CardContent>
-                <TicketTimelineChart eventId={params.id} />
+                {analytics.ticketTypeStats.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                    <p className="text-sm">No ticket types available yet</p>
+                    <p className="text-xs">Create ticket types to see their performance</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border">
+                    <div className="grid grid-cols-5 gap-4 p-4 text-sm font-medium">
+                      <div>Name</div>
+                      <div>Type</div>
+                      <div>Status</div>
+                      <div>Sold</div>
+                      <div>Revenue</div>
+                    </div>
+                    <div className="divide-y">
+                      {analytics.ticketTypeStats.map((ticket) => (
+                        <div key={ticket.id} className="grid grid-cols-5 gap-4 p-4 text-sm">
+                          <div>{ticket.name}</div>
+                          <div className="capitalize">{ticket.type}</div>
+                          <div>
+                            <Badge
+                              variant={
+                                ticket.status === "on-sale"
+                                  ? "success"
+                                  : ticket.status === "sold-out"
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                            >
+                              {ticket.status}
+                            </Badge>
+                          </div>
+                          <div>{ticket.totalSold}</div>
+                          <div>${ticket.totalRevenue.toFixed(2)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
+
             <Card>
               <CardHeader>
-                <CardTitle>Distribution by Type</CardTitle>
+                <CardTitle>Ticket Inventory</CardTitle>
               </CardHeader>
               <CardContent>
-                <TicketTypeDistributionChart eventId={params.id} />
+                <TicketInventoryChart data={analytics.ticketTypeStats} />
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="attendees" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+        <TabsContent value="sales" className="space-y-4">
+          <div className="grid gap-4">
             <Card>
               <CardHeader>
-                <CardTitle>Attendee Growth</CardTitle>
+                <CardTitle>Daily Sales</CardTitle>
               </CardHeader>
               <CardContent>
-                <EventAttendeeChart eventId={params.id} />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Geographic Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AttendeeLocationChart eventId={params.id} />
+                {analytics.salesByDay.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                    <p className="text-sm">No sales data available yet</p>
+                    <p className="text-xs">Sales data will appear here once tickets are sold</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border">
+                    <div className="grid grid-cols-3 gap-4 p-4 text-sm font-medium">
+                      <div>Date</div>
+                      <div>Tickets Sold</div>
+                      <div>Revenue</div>
+                    </div>
+                    <div className="divide-y">
+                      {analytics.salesByDay.map((day) => (
+                        <div key={day.date} className="grid grid-cols-3 gap-4 p-4 text-sm">
+                          <div>{new Date(day.date).toLocaleDateString()}</div>
+                          <div>{day.count}</div>
+                          <div>${day.revenue.toFixed(2)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

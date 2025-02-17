@@ -1,11 +1,57 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { CalendarIcon, MapPinIcon, ShareIcon, UserIcon, CheckCircle2 } from "lucide-react"
+import { Calendar, Clock, MapPin, Share2, Building2, Facebook, Instagram, Twitter, Linkedin, Globe, Users } from "lucide-react"
 import { TicketSelection } from "@/components/events/TicketSelection"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { format } from "date-fns"
+import { useEffect, useState, useCallback } from "react"
+import { apiClient } from "@/lib/api-client"
+import { Skeleton } from "@/components/ui/skeleton"
 import { EventSlider } from "@/components/events/EventSlider"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ImageIcon } from "lucide-react"
+
+interface Organization {
+  id: string;
+  name: string;
+  website?: string;
+  socialLinks?: string;
+}
+
+interface Event {
+  id: string;
+  title: string;
+  description: string;
+  startTimestamp: string;
+  endTimestamp: string;
+  venue: string | null;
+  address: string | null;
+  category: string;
+  isOnline: boolean;
+  capacity: number;
+  coverImage?: string;
+  status?: "draft" | "published" | "cancelled";
+  organizationId: string;
+  organization?: Organization;
+  ticketTypes?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    price: number;
+    quantity: number;
+    type: 'paid' | 'free';
+    saleStart: string;
+    saleEnd: string;
+    maxPerOrder?: number;
+    minPerOrder?: number;
+    status?: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
+    soldCount?: number;
+  }>;
+}
 
 interface EventPageProps {
   params: {
@@ -13,201 +59,339 @@ interface EventPageProps {
   }
 }
 
-export default async function EventPage({ params }: EventPageProps) {
-  // In a real app, fetch event data here using the id
-  const event = {
-    id: params.id,
-    title: "TAEYANG 2025 TOUR [THE LIGHT YEAR] ENCORE",
-    date: "Tuesday, July 8",
-    time: "8pm - 5pm GMT+7",
-    location: {
-      venue: "The Landmark Bangkok",
-      address: "138 Sukhumvit Road Khet Khlong Toei, Krung Thep Maha Nakhon 10110 Thailand",
-    },
-    imageUrl: "/placeholder.jpg",
-    description: "Experience an unforgettable evening with TAEYANG as he returns to Bangkok for his encore performance. This spectacular show promises to deliver his biggest hits and newest releases in an immersive concert experience.",
-    organizer: {
-      name: "Eurasia Research",
-      image: "/placeholder.jpg",
-      eventsCount: 48,
-      verified: true,
-    },
-    tags: ["Concert", "K-Pop", "Live Music", "Entertainment"],
-    ticketTypes: [
-      {
-        id: "vip",
-        name: "VIP Package",
-        price: 299.99,
-        description: "Front row seating with exclusive merchandise",
-        available: 50,
-      },
-      {
-        id: "standard",
-        name: "Standard Admission",
-        price: 99.99,
-        description: "General admission seating",
-        available: 200,
-      },
-    ],
-    similarEvents: [
-      {
-        id: "2",
-        title: "BTS World Tour 2025",
-        imageUrl: "/placeholder.jpg",
-        date: "August 15",
-      },
-      {
-        id: "3",
-        title: "BLACKPINK in Bangkok",
-        imageUrl: "/placeholder.jpg",
-        date: "September 20",
-      },
-      {
-        id: "4",
-        title: "TWICE 2025 World Tour",
-        imageUrl: "/placeholder.jpg",
-        date: "October 5",
-      },
-      {
-        id: "5",
-        title: "Red Velvet in Bangkok",
-        imageUrl: "/placeholder.jpg",
-        date: "November 12",
-      },
-      {
-        id: "6",
-        title: "NCT 127 Neo City Tour",
-        imageUrl: "/placeholder.jpg",
-        date: "December 3",
-      },
-      {
-        id: "7",
-        title: "ENHYPEN World Tour",
-        imageUrl: "/placeholder.jpg",
-        date: "January 15",
-      },
-      {
-        id: "8",
-        title: "IVE The First World Tour",
-        imageUrl: "/placeholder.jpg",
-        date: "February 8",
-      },
-      {
-        id: "9",
-        title: "NewJeans First Fan Meeting",
-        imageUrl: "/placeholder.jpg",
-        date: "March 20",
-      },
-    ],
+function getStatusVariant(status: "draft" | "published" | "cancelled"): "default" | "secondary" | "destructive" {
+  switch (status) {
+    case "published":
+      return "default"
+    case "draft":
+      return "secondary"
+    case "cancelled":
+      return "destructive"
+  }
+}
+
+export default function EventPage({ params }: EventPageProps) {
+  const [event, setEvent] = useState<Event | null>(null)
+  const [similarEvents, setSimilarEvents] = useState<Event[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchEvent = useCallback(async () => {
+    let isCancelled = false;
+
+    try {
+      setIsLoading(true)
+      setError(null)
+      const data = await apiClient.events.getById(params.id)
+      if (!isCancelled) {
+        setEvent(data)
+
+        // Fetch similar events in the same category
+        const similar = await apiClient.events.getPublicEvents({
+          category: data.category,
+          sort: "date"
+        })
+        if (!isCancelled) {
+          setSimilarEvents(similar)
+        }
+      }
+    } catch (error: any) {
+      // Ignore cancelled requests
+      if (error.message === 'Request was cancelled' || isCancelled) {
+        return;
+      }
+      console.error("Failed to fetch event:", error)
+      if (!isCancelled) {
+        setError(error.message || "Failed to load event details")
+      }
+    } finally {
+      if (!isCancelled) {
+        setIsLoading(false)
+      }
+    }
+
+    return () => {
+      isCancelled = true;
+    }
+  }, [params.id])
+
+  useEffect(() => {
+    const cleanupFn = fetchEvent();
+
+    return () => {
+      // Handle the Promise returned by fetchEvent
+      cleanupFn.then(cleanup => {
+        if (cleanup) cleanup();
+      });
+    };
+  }, [fetchEvent])
+
+  if (isLoading) {
+    return (
+      <div className="container pb-10">
+        <Skeleton className="h-[500px] w-full rounded-lg" />
+        <div className="mt-8 grid gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-8">
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+          <Skeleton className="h-[400px] w-full" />
+        </div>
+      </div>
+    )
   }
 
-  return (
-    <div>
-      <div className="container pb-10">
-        {/* Hero Image */}
-        <div className="relative h-[300px] w-full overflow-hidden rounded-lg bg-muted sm:h-[400px] lg:h-[500px]">
-          <Image
-            src={event.imageUrl}
-            alt={event.title}
-            fill
-            className="object-cover"
-            priority
-          />
-        </div>
-
-        {/* Content */}
-        <div className="mt-8 grid gap-8 lg:grid-cols-3">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Event Header */}
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-2xl font-bold sm:text-3xl">{event.title}</h1>
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <CalendarIcon className="h-4 w-4" />
-                    <span>{event.date} • {event.time}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPinIcon className="h-4 w-4" />
-                    <div>
-                      <p className="font-medium text-foreground">{event.location.venue}</p>
-                      <p className="text-sm">{event.location.address}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon">
-                <ShareIcon className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Event Description */}
-            <div>
-              <h2 className="text-lg font-semibold mb-2">About this Event</h2>
-              <p className="text-muted-foreground">{event.description}</p>
-            </div>
-
-            {/* Tags */}
-            <div className="flex flex-wrap gap-2">
-              {event.tags.map((tag) => (
-                <Badge key={tag} variant="secondary">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-
-            {/* Organizer */}
-            <div>
-              <h2 className="text-lg font-semibold mb-4">Organizer</h2>
-              <Link href={`/organizer/${event.organizer.name}`} className="group">
-                <Card className="p-4 transition-colors hover:bg-muted/50">
-                  <div className="flex items-center gap-4">
-                    <div className="relative h-16 w-16 shrink-0">
-                      <Image
-                        src={event.organizer.image}
-                        alt={event.organizer.name}
-                        fill
-                        className="rounded-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-lg font-semibold truncate group-hover:text-primary">
-                          {event.organizer.name}
-                        </h3>
-                        {event.organizer.verified && (
-                          <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        <UserIcon className="inline-block h-3 w-3 mr-1" />
-                        {event.organizer.eventsCount} events organized
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
-            </div>
-          </div>
-
-          {/* Ticket Selection */}
-          <div className="lg:sticky lg:top-8">
-            <TicketSelection
-              eventId={event.id}
-              ticketTypes={event.ticketTypes}
-            />
+  if (error || !event) {
+    return (
+      <div className="container flex min-h-[50vh] items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-destructive">Error</h1>
+          <p className="text-muted-foreground">{error || "Event not found"}</p>
+          <div className="mt-4 space-x-4">
+            <Button onClick={fetchEvent}>
+              Try Again
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/events">Back to Events</Link>
+            </Button>
           </div>
         </div>
       </div>
+    )
+  }
 
-      {/* Similar Events Slider - Full Width */}
-      <section className="bg-muted/50 py-12 mt-16">
-        <div className="container">
-          <h2 className="text-2xl font-semibold mb-8">More Events Like This</h2>
+  const location = event.isOnline ? "Online Event" : event.venue || event.address || "Location TBA"
+
+  const renderOrganizer = () => {
+    if (!event?.organization) return null;
+
+    let socialLinks: { facebook?: string; instagram?: string; twitter?: string; linkedin?: string; } = {};
+    try {
+      if (event.organization.socialLinks) {
+        socialLinks = JSON.parse(event.organization.socialLinks);
+      }
+    } catch (error) {
+      console.error('Error parsing social links:', error);
+    }
+
+    return (
+      <Card className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Building2 className="h-12 w-12 text-gray-400" />
+            <div>
+              <h3 className="text-lg font-semibold">{event.organization.name}</h3>
+              <p className="text-sm text-gray-500">Event Organizer</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {event.organization.website && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={event.organization.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <Globe className="h-5 w-5 text-gray-600" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Visit website</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {socialLinks.facebook && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={socialLinks.facebook}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <Facebook className="h-5 w-5 text-gray-600" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Facebook</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {socialLinks.instagram && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={socialLinks.instagram}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <Instagram className="h-5 w-5 text-gray-600" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Instagram</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {socialLinks.twitter && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={socialLinks.twitter}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <Twitter className="h-5 w-5 text-gray-600" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Twitter</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {socialLinks.linkedin && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={socialLinks.linkedin}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <Linkedin className="h-5 w-5 text-gray-600" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>LinkedIn</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
         </div>
-        <EventSlider events={event.similarEvents} />
-      </section>
+      </Card>
+    );
+  };
+
+  return (
+    <div className="container mx-auto py-8 px-4 space-y-8">
+      {/* Event Header */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold">{event.title}</h1>
+            <Badge variant="secondary" className="text-sm">
+              {event.category}
+            </Badge>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Button variant="outline" size="icon">
+              <Share2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Event Details */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Left Column - Event Info */}
+          <div className="md:col-span-2 space-y-6">
+            {/* Cover Image */}
+            <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100">
+              {event.coverImage ? (
+                <Image
+                  src={event.coverImage}
+                  alt={event.title}
+                  fill
+                  className="object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <ImageIcon className="h-12 w-12 text-gray-400" />
+                </div>
+              )}
+            </div>
+
+            {/* Event Description */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">About this event</h2>
+              <p className="text-gray-600 whitespace-pre-wrap">{event.description}</p>
+            </div>
+
+            {/* Similar Events */}
+            {similarEvents.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold">Similar Events</h2>
+                <EventSlider events={similarEvents} currentEventId={event.id} />
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Event Details & Tickets */}
+          <div className="space-y-6">
+            {/* Event Details Card */}
+            <Card className="p-6 space-y-6">
+              {/* Date & Time */}
+              <div className="flex items-start space-x-4">
+                <Calendar className="h-5 w-5 text-gray-500 mt-1" />
+                <div>
+                  <h3 className="font-medium">Date and time</h3>
+                  <p className="text-sm text-gray-600">
+                    {format(new Date(event.startTimestamp), "EEE, MMM d, yyyy")}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {format(new Date(event.startTimestamp), "h:mm a")} -{" "}
+                    {format(new Date(event.endTimestamp), "h:mm a")}
+                  </p>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div className="flex items-start space-x-4">
+                <MapPin className="h-5 w-5 text-gray-500 mt-1" />
+                <div>
+                  <h3 className="font-medium">Location</h3>
+                  <p className="text-sm text-gray-600">{location}</p>
+                  {event.address && <p className="text-sm text-gray-600">{event.address}</p>}
+                </div>
+              </div>
+
+              {/* Capacity */}
+              <div className="flex items-start space-x-4">
+                <Users className="h-5 w-5 text-gray-500 mt-1" />
+                <div>
+                  <h3 className="font-medium">Capacity</h3>
+                  <p className="text-sm text-gray-600">{event.capacity} attendees</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Organizer */}
+            {renderOrganizer()}
+
+            {/* Ticket Selection */}
+            {event.ticketTypes && event.ticketTypes.length > 0 && (
+              <TicketSelection
+                eventId={event.id}
+                ticketTypes={event.ticketTypes}
+              />
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

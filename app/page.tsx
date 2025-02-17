@@ -6,54 +6,49 @@ import { CategoryExplorer } from "@/components/events/CategoryExplorer"
 import { EventCard } from "@/components/events/EventCard"
 import { EventFilterTabs } from "@/components/events/EventFilterTabs"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
-
-// This would come from your API in a real app
-const SAMPLE_EVENTS = [
-  {
-    id: "1",
-    title: "TAEYAND 2025 TOUR - [THE LIGHT YEAR] - ENCORE",
-    category: "K-Pop Live Concert",
-    date: "20 April 2025",
-    time: "6:00 PM - 9:00 PM",
-    location: "125 Siam Avenue, Britton Rouge",
-    price: 100,
-    imageUrl: "/placeholder.jpg",
-    organizer: "The World Organizer",
-  },
-  {
-    id: "2",
-    title: "Web3 Developer Conference 2025",
-    category: "Technology",
-    date: "25 April 2025",
-    time: "9:00 AM - 6:00 PM",
-    location: "Bangkok Convention Center",
-    price: 250,
-    imageUrl: "/placeholder.jpg",
-    organizer: "Tech Events Thailand",
-  },
-  {
-    id: "3",
-    title: "Thai Food Festival 2025",
-    category: "Food & Drink",
-    date: "27 April 2025",
-    time: "11:00 AM - 10:00 PM",
-    location: "Lumpini Park, Bangkok",
-    price: 0,
-    imageUrl: "/placeholder.jpg",
-    organizer: "Bangkok Food Association",
-  },
-]
+import { useEffect, useState } from "react"
+import { apiClient, type Event } from "@/lib/api-client"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function HomePage() {
   const { user } = useAuth()
   const router = useRouter()
+  const [popularEvents, setPopularEvents] = useState<Event[]>([])
+  const [trendingEvents, setTrendingEvents] = useState<Event[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     if (!user) {
       router.push("/landing")
     }
   }, [user, router])
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setIsLoading(true)
+        // Fetch popular events (sorted by date)
+        const popular = await apiClient.events.getPublicEvents({
+          sort: "date",
+        })
+        setPopularEvents(popular)
+
+        // Fetch trending events (sorted by price high to low)
+        const trending = await apiClient.events.getPublicEvents({
+          sort: "price-high",
+        })
+        setTrendingEvents(trending)
+      } catch (error) {
+        console.error("Failed to fetch events:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (user) {
+      fetchEvents()
+    }
+  }, [user])
 
   if (!user) {
     return null // Return null to prevent flash of content during redirect
@@ -83,9 +78,19 @@ export default function HomePage() {
             <EventFilterTabs />
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {SAMPLE_EVENTS.map((event) => (
-              <EventCard key={event.id} {...event} />
-            ))}
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-[400px] rounded-lg" />
+              ))
+            ) : popularEvents.length > 0 ? (
+              popularEvents.slice(0, 6).map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))
+            ) : (
+              <div className="col-span-full text-center text-muted-foreground">
+                No events found
+              </div>
+            )}
           </div>
         </section>
 
@@ -94,9 +99,19 @@ export default function HomePage() {
             Trending Events Around the World
           </h2>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {SAMPLE_EVENTS.map((event) => (
-              <EventCard key={event.id} {...event} />
-            ))}
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-[400px] rounded-lg" />
+              ))
+            ) : trendingEvents.length > 0 ? (
+              trendingEvents.slice(0, 6).map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))
+            ) : (
+              <div className="col-span-full text-center text-muted-foreground">
+                No events found
+              </div>
+            )}
           </div>
         </section>
       </div>

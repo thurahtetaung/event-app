@@ -1,38 +1,50 @@
 "use client"
 
 import {
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from "recharts"
 import { format } from "date-fns"
 
-interface DailySalesChartProps {
+interface TicketInventoryChartProps {
   data: Array<{
-    date: string
-    count: number
-    revenue: number
+    id: string
+    name: string
+    type: "free" | "paid"
+    totalSold: number
+    totalRevenue: number
+    status: "on-sale" | "paused" | "sold-out" | "scheduled"
+    quantity: number
   }>
 }
 
-export function DailySalesChart({ data }: DailySalesChartProps) {
+export function TicketInventoryChart({ data }: TicketInventoryChartProps) {
   if (!data || data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[350px] text-muted-foreground">
-        <p className="text-sm">No sales data available yet</p>
-        <p className="text-xs">Sales data will appear here once tickets are sold</p>
+        <p className="text-sm">No ticket types available</p>
+        <p className="text-xs">Create ticket types to see their performance</p>
       </div>
     )
   }
 
+  const chartData = data.map(ticket => ({
+    name: ticket.name,
+    sold: ticket.totalSold,
+    available: ticket.quantity - ticket.totalSold,
+    status: ticket.status,
+  }))
+
   return (
     <ResponsiveContainer width="100%" height={350}>
-      <AreaChart
-        data={data}
+      <BarChart
+        data={chartData}
         margin={{
           top: 10,
           right: 30,
@@ -41,26 +53,27 @@ export function DailySalesChart({ data }: DailySalesChartProps) {
         }}
       >
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis
-          dataKey="date"
-          tickFormatter={(date) => format(new Date(date), "MMM d")}
-        />
+        <XAxis dataKey="name" />
         <YAxis />
         <Tooltip
           content={({ active, payload }) => {
             if (active && payload && payload.length) {
+              const data = payload[0].payload;
               return (
                 <div className="rounded-lg border bg-background p-2 shadow-sm">
                   <div className="grid gap-2">
                     <div className="flex flex-col">
                       <span className="text-[0.70rem] uppercase text-muted-foreground">
-                        {format(new Date(payload[0].payload.date), "MMM d, yyyy")}
+                        {data.name}
                       </span>
                       <span className="font-bold text-muted-foreground">
-                        ${payload[0].value} revenue
+                        {data.sold} sold
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {payload[1].value} tickets sold
+                        {data.available} available
+                      </span>
+                      <span className="text-xs text-muted-foreground capitalize">
+                        Status: {data.status}
                       </span>
                     </div>
                   </div>
@@ -70,23 +83,10 @@ export function DailySalesChart({ data }: DailySalesChartProps) {
             return null
           }}
         />
-        <Area
-          type="monotone"
-          dataKey="revenue"
-          stackId="1"
-          stroke="#2563eb"
-          fill="#2563eb"
-          fillOpacity={0.2}
-        />
-        <Area
-          type="monotone"
-          dataKey="count"
-          stackId="2"
-          stroke="#16a34a"
-          fill="#16a34a"
-          fillOpacity={0.2}
-        />
-      </AreaChart>
+        <Legend />
+        <Bar dataKey="sold" stackId="a" fill="#2563eb" name="Sold" />
+        <Bar dataKey="available" stackId="a" fill="#94a3b8" name="Available" />
+      </BarChart>
     </ResponsiveContainer>
   )
 }

@@ -37,6 +37,9 @@ import { toast } from "sonner"
 import { apiClient } from "@/lib/api-client"
 import { useRouter } from "next/navigation"
 import type { EventData } from "@/lib/api-client"
+import { Upload, Trash2 } from "lucide-react"
+import Image from "next/image"
+import { uploadEventCoverImage } from "@/lib/supabase-client"
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -55,7 +58,7 @@ const formSchema = z.object({
   category: z.string(),
   isOnline: z.boolean(),
   capacity: z.number().min(1),
-  coverImage: z.string().optional(),
+  coverImage: z.instanceof(File).optional(),
   status: z.enum(["draft", "published", "cancelled"]).optional(),
 }).refine((data) => {
   // If it's not an online event, venue and address are required
@@ -93,6 +96,7 @@ const minutes = ["00", "15", "30", "45"]
 export function EventSettings({ event, onSuccess }: EventSettingsProps) {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const [coverImagePreview, setCoverImagePreview] = useState<string>(event.coverImage || "")
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -113,7 +117,6 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
       category: event.category,
       isOnline: event.isOnline,
       capacity: event.capacity,
-      coverImage: event.coverImage,
       status: event.status,
     },
   })
@@ -128,6 +131,11 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
         `${data.date.toISOString().split('T')[0]}T${data.endTime.hour}:${data.endTime.minute}:00`
       ).toISOString();
 
+      let coverImageUrl = event.coverImage;
+      if (data.coverImage) {
+        coverImageUrl = await uploadEventCoverImage(data.coverImage);
+      }
+
       const eventData: Partial<EventData> = {
         title: data.title,
         description: data.description,
@@ -139,23 +147,131 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
         isOnline: data.isOnline,
         capacity: data.capacity,
         status: data.status,
+        coverImage: coverImageUrl,
       };
 
       await apiClient.events.update(event.id, eventData);
       toast.success('Event updated successfully');
       router.refresh();
       onSuccess?.(eventData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating event:', error);
-      toast.error('Failed to update event');
+
+      // Extract error message from the API response
+      let errorMessage: string;
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (typeof error.message === 'string') {
+        errorMessage = error.message;
+      } else {
+        errorMessage = 'Failed to update event';
+      }
+
+      // Show error in toast
+      toast.error(errorMessage);
+
+      // Set form field errors based on the error message
+      if (errorMessage.toLowerCase().includes('capacity')) {
+        form.setError('capacity', {
+          type: 'manual',
+          message: errorMessage
+        });
+      } else if (errorMessage.toLowerCase().includes('venue') || errorMessage.toLowerCase().includes('address')) {
+        if (errorMessage.toLowerCase().includes('venue')) {
+          form.setError('venue', {
+            type: 'manual',
+            message: errorMessage
+          });
+        }
+        if (errorMessage.toLowerCase().includes('address')) {
+          form.setError('address', {
+            type: 'manual',
+            message: errorMessage
+          });
+        }
+      } else if (errorMessage.toLowerCase().includes('time') || errorMessage.toLowerCase().includes('date')) {
+        if (errorMessage.toLowerCase().includes('start')) {
+          form.setError('startTime', {
+            type: 'manual',
+            message: errorMessage
+          });
+        } else if (errorMessage.toLowerCase().includes('end')) {
+          form.setError('endTime', {
+            type: 'manual',
+            message: errorMessage
+          });
+        } else {
+          form.setError('date', {
+            type: 'manual',
+            message: errorMessage
+          });
+        }
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      form.setValue('coverImage', file)
+      setCoverImagePreview(URL.createObjectURL(file))
+    }
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="container max-w-5xl mx-auto space-y-8 py-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Cover Image</CardTitle>
+            <CardDescription>
+              Update your event's cover image
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="relative aspect-video w-full overflow-hidden rounded-lg border-2 border-dashed">
+              {coverImagePreview ? (
+                <div className="group relative h-full">
+                  <Image
+                    src={coverImagePreview}
+                    alt="Cover preview"
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        form.setValue('coverImage', undefined)
+                        setCoverImagePreview("")
+                      }}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Remove Image
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex h-full cursor-pointer flex-col items-center justify-center gap-2">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    Click to upload or drag and drop
+                  </span>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleCoverImageChange}
+                  />
+                </label>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Basic Information</CardTitle>
@@ -377,6 +493,7 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
                       type="number"
                       min={1}
                       {...field}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
                       value={field.value}
                     />
                   </FormControl>

@@ -33,20 +33,17 @@ import {
 } from "@/components/ui/form"
 import { apiClient } from "@/lib/api-client"
 import { DatePicker } from "@/components/ui/date-picker"
+import { uploadEventCoverImage } from "@/lib/supabase-client"
 
-interface EventData {
+interface FormEventData {
   title: string
-  description: string
-  date: string
-  startTime: string
-  endTime: string
-  venue?: string
-  address?: string
+  description?: string
+  startTimestamp: string
+  endTimestamp: string
+  venue: string | null
+  address: string | null
   category: string
   isOnline: boolean
-  isPrivate: boolean
-  requireApproval: boolean
-  enableWaitlist: boolean
   capacity: number
   coverImage?: string
 }
@@ -127,30 +124,86 @@ export function EventCreationForm() {
     }
   }
 
-  const onSubmit = async (values: FormValues) => {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       setIsLoading(true)
-      const event = await apiClient.events.create({
+
+      const startTimestamp = new Date(
+        `${values.date.toISOString().split('T')[0]}T${values.startTime.hour}:${values.startTime.minute}:00`
+      ).toISOString()
+      const endTimestamp = new Date(
+        `${values.date.toISOString().split('T')[0]}T${values.endTime.hour}:${values.endTime.minute}:00`
+      ).toISOString()
+
+      const eventData = {
         title: values.title,
-        description: values.description || "",
-        date: values.date,
-        startTime: values.startTime,
-        endTime: values.endTime,
+        description: values.description,
+        startTimestamp,
+        endTimestamp,
         venue: values.isOnline ? null : values.venue,
         address: values.isOnline ? null : values.address,
         category: values.category,
         isOnline: values.isOnline,
         capacity: values.capacity,
-        coverImage: values.coverImage,
-      })
-
-      toast.success("Event created successfully!")
-      if (event?.id) {
-        router.push(`/events/${event.id}`)
+        coverImage: values.coverImage ? await uploadEventCoverImage(values.coverImage) : undefined,
       }
-    } catch (error) {
+
+      const event = await apiClient.events.create(eventData)
+      toast.success("Event created successfully")
+      router.push(`/organizer/events/${event.id}`)
+    } catch (error: any) {
       console.error("Error creating event:", error)
-      toast.error("Failed to create event")
+
+      // Extract error message from the API response
+      let errorMessage: string;
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (typeof error.message === 'string') {
+        errorMessage = error.message;
+      } else {
+        errorMessage = 'Failed to create event';
+      }
+
+      // Show error in toast
+      toast.error(errorMessage);
+
+      // Set form field errors based on the error message
+      if (errorMessage.toLowerCase().includes('capacity')) {
+        form.setError('capacity', {
+          type: 'manual',
+          message: errorMessage
+        });
+      } else if (errorMessage.toLowerCase().includes('venue') || errorMessage.toLowerCase().includes('address')) {
+        if (errorMessage.toLowerCase().includes('venue')) {
+          form.setError('venue', {
+            type: 'manual',
+            message: errorMessage
+          });
+        }
+        if (errorMessage.toLowerCase().includes('address')) {
+          form.setError('address', {
+            type: 'manual',
+            message: errorMessage
+          });
+        }
+      } else if (errorMessage.toLowerCase().includes('time') || errorMessage.toLowerCase().includes('date')) {
+        if (errorMessage.toLowerCase().includes('start')) {
+          form.setError('startTime', {
+            type: 'manual',
+            message: errorMessage
+          });
+        } else if (errorMessage.toLowerCase().includes('end')) {
+          form.setError('endTime', {
+            type: 'manual',
+            message: errorMessage
+          });
+        } else {
+          form.setError('date', {
+            type: 'manual',
+            message: errorMessage
+          });
+        }
+      }
     } finally {
       setIsLoading(false)
     }

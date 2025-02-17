@@ -23,9 +23,7 @@ const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   isFree: z.boolean().default(false),
-  price: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-    message: "Price must be a non-negative number",
-  }),
+  price: z.coerce.number().min(0, "Price must be a non-negative number"),
   quantity: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Quantity must be greater than 0",
   }),
@@ -84,7 +82,7 @@ export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps)
       name: initialData?.name || "",
       description: initialData?.description || "",
       isFree: initialData?.price === 0,
-      price: initialData?.price?.toString() || "0",
+      price: initialData?.price || 0,
       quantity: initialData?.quantity?.toString() || "1",
       saleStartDate: initialData?.saleStartDate || new Date(),
       saleEndDate: initialData?.saleEndDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Default to 7 days from now
@@ -105,13 +103,13 @@ export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps)
       const ticketData = {
         name: values.name,
         description: values.description,
-        price: isFree ? "0" : values.price,
-        quantity: values.quantity,
+        price: isFree ? 0 : Number(values.price),
+        quantity: Number(values.quantity),
         type: isFree ? "free" as const : "paid" as const,
         saleStart: values.saleStartDate.toISOString(),
         saleEnd: values.saleEndDate.toISOString(),
-        maxPerOrder: values.hasMaximumPurchase ? values.maximumPurchase : undefined,
-        minPerOrder: values.hasMinimumPurchase ? values.minimumPurchase : undefined,
+        maxPerOrder: values.hasMaximumPurchase ? Number(values.maximumPurchase) : undefined,
+        minPerOrder: values.hasMinimumPurchase ? Number(values.minimumPurchase) : undefined,
       }
 
       if (initialData?.id) {
@@ -123,9 +121,39 @@ export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps)
       toast.success(initialData ? "Ticket type updated successfully" : "Ticket type created successfully")
       form.reset()
       onSuccess?.()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving ticket:", error)
-      toast.error(initialData ? "Failed to update ticket type" : "Failed to create ticket type")
+
+      // Extract error message directly from the error
+      const errorMessage = error.message || (initialData ? "Failed to update ticket type" : "Failed to create ticket type");
+
+      // Show error in toast
+      toast.error(errorMessage);
+
+      // Set form field errors based on the error message
+      if (errorMessage.toLowerCase().includes('quantity') || errorMessage.toLowerCase().includes('capacity')) {
+        form.setError('quantity', {
+          type: 'manual',
+          message: errorMessage
+        });
+      } else if (errorMessage.toLowerCase().includes('price')) {
+        form.setError('price', {
+          type: 'manual',
+          message: errorMessage
+        });
+      } else if (errorMessage.toLowerCase().includes('sale')) {
+        if (errorMessage.toLowerCase().includes('start')) {
+          form.setError('saleStartDate', {
+            type: 'manual',
+            message: errorMessage
+          });
+        } else if (errorMessage.toLowerCase().includes('end')) {
+          form.setError('saleEndDate', {
+            type: 'manual',
+            message: errorMessage
+          });
+        }
+      }
     } finally {
       setIsLoading(false)
     }
@@ -197,7 +225,7 @@ export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps)
                         onCheckedChange={(checked) => {
                           field.onChange(checked)
                           if (checked) {
-                            form.setValue("price", "0")
+                            form.setValue("price", 0)
                           }
                         }}
                       />

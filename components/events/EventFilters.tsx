@@ -50,74 +50,59 @@ export function EventFilters() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       category: searchParams.get("category") || undefined,
-      date: undefined,
-      priceRange: "all",
-      minPrice: "",
-      maxPrice: "",
+      date: searchParams.get("date") ? new Date(searchParams.get("date")!) : undefined,
+      priceRange: (searchParams.get("priceRange") as "all" | "free" | "paid") || "all",
+      minPrice: searchParams.get("minPrice") || "",
+      maxPrice: searchParams.get("maxPrice") || "",
       sort: searchParams.get("sort") || "date",
-      isOnline: false,
-      isInPerson: false,
+      isOnline: searchParams.get("isOnline") === "true",
+      isInPerson: searchParams.get("isInPerson") === "true",
     },
   })
 
   function onSubmit(values: FilterValues) {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams()
 
     // Update search params based on form values
     if (values.category && values.category !== "All Categories") {
       params.set("category", values.category)
-    } else {
-      params.delete("category")
     }
 
     if (values.date) {
       params.set("date", format(values.date, "yyyy-MM-dd"))
-    } else {
-      params.delete("date")
     }
 
     if (values.priceRange !== "all") {
       params.set("priceRange", values.priceRange)
-    } else {
-      params.delete("priceRange")
     }
 
     if (values.minPrice) {
       params.set("minPrice", values.minPrice)
-    } else {
-      params.delete("minPrice")
     }
 
     if (values.maxPrice) {
       params.set("maxPrice", values.maxPrice)
-    } else {
-      params.delete("maxPrice")
     }
 
     if (values.sort !== "date") {
       params.set("sort", values.sort)
-    } else {
-      params.delete("sort")
     }
 
     if (values.isOnline) {
       params.set("isOnline", "true")
-    } else {
-      params.delete("isOnline")
     }
 
     if (values.isInPerson) {
       params.set("isInPerson", "true")
-    } else {
-      params.delete("isInPerson")
     }
 
     // Preserve the search query if it exists
-    const query = searchParams.get("q")
+    const query = searchParams.get("query")
     if (query) {
-      params.set("q", query)
+      params.set("query", query)
     }
 
+    // Use router.push to update URL
     router.push(`/events?${params.toString()}`)
   }
 

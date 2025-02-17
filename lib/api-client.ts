@@ -32,10 +32,13 @@ class ApiClient {
   }
 
   private abortPreviousRequest(requestKey: string) {
-    const previousController = this.abortControllers.get(requestKey);
-    if (previousController) {
-      previousController.abort();
-      this.abortControllers.delete(requestKey);
+    // Only abort non-GET requests
+    if (!requestKey.startsWith('GET-')) {
+      const previousController = this.abortControllers.get(requestKey);
+      if (previousController) {
+        previousController.abort();
+        this.abortControllers.delete(requestKey);
+      }
     }
   }
 
@@ -82,19 +85,24 @@ class ApiClient {
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const requestKey = this.getRequestKey(endpoint, options);
 
-    if (options?.method !== 'GET') {
+    // Only set up abort controller for non-GET requests
+    let controller: AbortController | undefined;
+    if (!requestKey.startsWith('GET-')) {
       this.abortPreviousRequest(requestKey);
+      controller = new AbortController();
+      this.abortControllers.set(requestKey, controller);
     }
 
-    const controller = new AbortController();
-    this.abortControllers.set(requestKey, controller);
-
     try {
-      const response = await this.executeRequest<T>(endpoint, options, controller.signal);
-      this.abortControllers.delete(requestKey);
+      const response = await this.executeRequest<T>(endpoint, options, controller?.signal);
+      if (controller) {
+        this.abortControllers.delete(requestKey);
+      }
       return response;
     } catch (error: any) {
-      this.abortControllers.delete(requestKey);
+      if (controller) {
+        this.abortControllers.delete(requestKey);
+      }
       if (error.name === 'AbortError') {
         throw new Error('Request was cancelled');
       }
@@ -271,12 +279,13 @@ class ApiClient {
         body: JSON.stringify({
           name: data.name,
           description: data.description,
-          price: data.type === 'free' ? 0 : parseFloat(data.price),
-          quantity: parseInt(data.quantity),
+          price: data.type === 'free' ? 0 : data.price,
+          quantity: data.quantity,
           type: data.type,
           saleStart: new Date(data.saleStart).toISOString(),
           saleEnd: new Date(data.saleEnd).toISOString(),
-          maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : undefined,
+          maxPerOrder: data.maxPerOrder,
+          minPerOrder: data.minPerOrder
         }),
       });
     },
@@ -287,12 +296,13 @@ class ApiClient {
         body: JSON.stringify({
           name: data.name,
           description: data.description,
-          price: data.type === 'free' ? 0 : parseFloat(data.price),
-          quantity: parseInt(data.quantity),
+          price: data.type === 'free' ? 0 : data.price,
+          quantity: data.quantity,
           type: data.type,
           saleStart: new Date(data.saleStart).toISOString(),
           saleEnd: new Date(data.saleEnd).toISOString(),
-          maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : undefined,
+          maxPerOrder: data.maxPerOrder,
+          minPerOrder: data.minPerOrder
         }),
       });
     },
@@ -304,8 +314,25 @@ class ApiClient {
       return this.fetch(`/api/events${queryString}`);
     },
 
-    getById: async (id: string) => {
-      return this.fetch(`/api/events/${id}`);
+    getById: async (id: string): Promise<Event> => {
+      return this.fetch<Event & { ticketTypes: Array<{
+        id: string;
+        name: string;
+        description?: string;
+        price: number;
+        quantity: number;
+        type: 'paid' | 'free';
+        saleStart: string;
+        saleEnd: string;
+        maxPerOrder?: number;
+        minPerOrder?: number;
+        status: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
+        soldCount: number;
+      }> }>(`/api/events/${id}`);
+    },
+
+    getAnalytics: async (id: string) => {
+      return this.fetch(`/api/events/${id}/analytics`);
     },
 
     update: async (id: string, data: Partial<EventData>): Promise<Event> => {
@@ -326,6 +353,32 @@ class ApiClient {
       return this.fetch(`/api/events/${id}`, {
         method: 'DELETE',
       });
+    },
+
+    getPublicEvents: async (params?: {
+      category?: string;
+      query?: string;
+      sort?: 'date' | 'price-low' | 'price-high';
+      date?: string;
+      priceRange?: 'all' | 'free' | 'paid';
+      minPrice?: string;
+      maxPrice?: string;
+      isOnline?: boolean;
+      isInPerson?: boolean;
+    }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.category) searchParams.set('category', params.category);
+      if (params?.query) searchParams.set('query', params.query);
+      if (params?.sort) searchParams.set('sort', params.sort);
+      if (params?.date) searchParams.set('date', params.date);
+      if (params?.priceRange) searchParams.set('priceRange', params.priceRange);
+      if (params?.minPrice) searchParams.set('minPrice', params.minPrice);
+      if (params?.maxPrice) searchParams.set('maxPrice', params.maxPrice);
+      if (params?.isOnline) searchParams.set('isOnline', params.isOnline.toString());
+      if (params?.isInPerson) searchParams.set('isInPerson', params.isInPerson.toString());
+
+      const queryString = searchParams.toString();
+      return this.fetch<Event[]>(`/api/events${queryString ? `?${queryString}` : ''}`);
     },
   };
 
@@ -386,6 +439,26 @@ class ApiClient {
       });
     },
   };
+
+  // Tickets endpoints
+  tickets = {
+    reserveFree: async (data: { eventId: string; tickets: Array<{ id: string; quantity: number }> }) => {
+      return this.fetch<{ orderId: string }>('/api/tickets/reserve-free', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  };
+
+  // Checkout endpoints
+  checkout = {
+    createSession: async (data: { eventId: string; tickets: Array<{ id: string; quantity: number }> }) => {
+      return this.fetch<{ url: string }>('/api/checkout/create-session', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  };
 }
 
 // Types
@@ -441,12 +514,13 @@ export interface EventData {
 export interface TicketTypeData {
   name: string;
   description?: string;
-  price: string;
-  quantity: string;
+  price: number;
+  quantity: number;
   type: 'paid' | 'free';
   saleStart: string;
   saleEnd: string;
-  maxPerOrder?: string;
+  maxPerOrder?: number;
+  minPerOrder?: number;
 }
 
 export interface OrganizationData {
@@ -512,6 +586,26 @@ interface FormEventData {
 export interface Event extends EventData {
   id: string;
   organizationId: string;
+  organization?: {
+    id: string;
+    name: string;
+    website?: string;
+    socialLinks?: string;
+  };
+  ticketTypes?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    price: number;
+    quantity: number;
+    type: 'paid' | 'free';
+    saleStart: string;
+    saleEnd: string;
+    maxPerOrder?: number;
+    minPerOrder?: number;
+    status?: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
+    soldCount?: number;
+  }>;
 }
 
 // Create and export a singleton instance
