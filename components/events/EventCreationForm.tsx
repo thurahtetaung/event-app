@@ -31,22 +31,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { apiClient } from "@/lib/api-client"
+import { apiClient, type RawFormEventData } from "@/lib/api-client"
 import { DatePicker } from "@/components/ui/date-picker"
 import { uploadEventCoverImage } from "@/lib/supabase-client"
 
-interface FormEventData {
-  title: string
-  description?: string
-  startTimestamp: string
-  endTimestamp: string
-  venue: string | null
-  address: string | null
-  category: string
-  isOnline: boolean
-  capacity: number
-  coverImage?: string
-}
+interface FormEventData extends RawFormEventData {}
 
 const EVENT_CATEGORIES = [
   "Conference",
@@ -124,28 +113,36 @@ export function EventCreationForm() {
     }
   }
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: FormValues) {
     try {
       setIsLoading(true)
 
-      const startTimestamp = new Date(
-        `${values.date.toISOString().split('T')[0]}T${values.startTime.hour}:${values.startTime.minute}:00`
-      ).toISOString()
-      const endTimestamp = new Date(
-        `${values.date.toISOString().split('T')[0]}T${values.endTime.hour}:${values.endTime.minute}:00`
-      ).toISOString()
+      // Ensure we have a valid date
+      if (!values.date || !(values.date instanceof Date)) {
+        throw new Error("Invalid date");
+      }
 
-      const eventData = {
+      // Create a new Date object to ensure we have a proper instance
+      const eventDate = new Date(values.date.getTime());
+
+      const eventData: RawFormEventData = {
         title: values.title,
         description: values.description,
-        startTimestamp,
-        endTimestamp,
+        date: eventDate,
+        startTime: {
+          hour: values.startTime.hour,
+          minute: values.startTime.minute,
+        },
+        endTime: {
+          hour: values.endTime.hour,
+          minute: values.endTime.minute,
+        },
         venue: values.isOnline ? null : values.venue,
         address: values.isOnline ? null : values.address,
         category: values.category,
         isOnline: values.isOnline,
-        capacity: values.capacity,
-        coverImage: values.coverImage ? await uploadEventCoverImage(values.coverImage) : undefined,
+        capacity: Number(values.capacity),
+        coverImage: values.coverImage,
       }
 
       const event = await apiClient.events.create(eventData)
@@ -369,10 +366,10 @@ export function EventCreationForm() {
                         >
                           <FormControl>
                             <SelectTrigger>
-                        <SelectValue placeholder="Hour" />
-                      </SelectTrigger>
+                              <SelectValue placeholder="Hour" />
+                            </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="max-h-[200px]">
                             {Array.from({ length: 24 }, (_, i) => i).map(
                               (hour) => (
                                 <SelectItem
@@ -380,11 +377,11 @@ export function EventCreationForm() {
                                   value={hour.toString().padStart(2, "0")}
                                 >
                                   {hour.toString().padStart(2, "0")}
-                            </SelectItem>
-                          )
+                                </SelectItem>
+                              )
                             )}
-                      </SelectContent>
-                    </Select>
+                          </SelectContent>
+                        </Select>
                     <Select
                           onValueChange={(value) =>
                             field.onChange({ ...field.value, minute: value })
@@ -393,17 +390,17 @@ export function EventCreationForm() {
                         >
                           <FormControl>
                             <SelectTrigger>
-                        <SelectValue placeholder="Minute" />
-                      </SelectTrigger>
+                              <SelectValue placeholder="Minute" />
+                            </SelectTrigger>
                           </FormControl>
-                      <SelectContent>
-                        {["00", "15", "30", "45"].map((minute) => (
-                          <SelectItem key={minute} value={minute}>
-                            {minute}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          <SelectContent className="max-h-[200px]">
+                            {["00", "15", "30", "45"].map((minute) => (
+                              <SelectItem key={minute} value={minute}>
+                                {minute}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                   </div>
                       <FormMessage />
                     </FormItem>
@@ -425,10 +422,10 @@ export function EventCreationForm() {
                         >
                           <FormControl>
                             <SelectTrigger>
-                        <SelectValue placeholder="Hour" />
-                      </SelectTrigger>
+                              <SelectValue placeholder="Hour" />
+                            </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="max-h-[200px]">
                             {Array.from({ length: 24 }, (_, i) => i).map(
                               (hour) => (
                                 <SelectItem
@@ -436,11 +433,11 @@ export function EventCreationForm() {
                                   value={hour.toString().padStart(2, "0")}
                                 >
                                   {hour.toString().padStart(2, "0")}
-                            </SelectItem>
-                          )
+                                </SelectItem>
+                              )
                             )}
-                      </SelectContent>
-                    </Select>
+                          </SelectContent>
+                        </Select>
                     <Select
                           onValueChange={(value) =>
                             field.onChange({ ...field.value, minute: value })
@@ -449,17 +446,17 @@ export function EventCreationForm() {
                         >
                           <FormControl>
                             <SelectTrigger>
-                        <SelectValue placeholder="Minute" />
-                      </SelectTrigger>
+                              <SelectValue placeholder="Minute" />
+                            </SelectTrigger>
                           </FormControl>
-                      <SelectContent>
-                        {["00", "15", "30", "45"].map((minute) => (
-                          <SelectItem key={minute} value={minute}>
-                            {minute}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          <SelectContent className="max-h-[200px]">
+                            {["00", "15", "30", "45"].map((minute) => (
+                              <SelectItem key={minute} value={minute}>
+                                {minute}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                   </div>
                       <FormMessage />
                     </FormItem>

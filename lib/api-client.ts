@@ -237,36 +237,51 @@ class ApiClient {
 
   // Events endpoints
   events = {
-    create: async (data: FormEventData): Promise<Event> => {
-      const startTimestamp = new Date(
-        `${data.date.toISOString().split('T')[0]}T${data.startTime.hour}:${data.startTime.minute}:00`
-      ).toISOString();
-      const endTimestamp = new Date(
-        `${data.date.toISOString().split('T')[0]}T${data.endTime.hour}:${data.endTime.minute}:00`
-      ).toISOString();
-
-      let coverImageUrl;
-      if (data.coverImage) {
-        coverImageUrl = await uploadEventCoverImage(data.coverImage);
+    create: async (data: RawFormEventData): Promise<Event> => {
+      // Ensure we have a valid date
+      if (!data.date || !(data.date instanceof Date)) {
+        throw new Error("Invalid date format");
       }
 
-      const eventData: EventData = {
-        title: data.title,
-        description: data.description,
-        startTimestamp,
-        endTimestamp,
-        venue: data.venue,
-        address: data.address,
-        category: data.category,
-        isOnline: data.isOnline,
-        capacity: data.capacity,
-        coverImage: coverImageUrl,
-      };
+      // Ensure we have valid time data
+      if (!data.startTime?.hour || !data.startTime?.minute || !data.endTime?.hour || !data.endTime?.minute) {
+        throw new Error("Invalid time format");
+      }
 
-      return this.fetch('/api/events', {
-        method: 'POST',
-        body: JSON.stringify(eventData),
-      });
+      try {
+        const startTimestamp = new Date(
+          `${data.date.toISOString().split('T')[0]}T${data.startTime.hour}:${data.startTime.minute}:00`
+        ).toISOString();
+        const endTimestamp = new Date(
+          `${data.date.toISOString().split('T')[0]}T${data.endTime.hour}:${data.endTime.minute}:00`
+        ).toISOString();
+
+        let coverImageUrl;
+        if (data.coverImage) {
+          coverImageUrl = await uploadEventCoverImage(data.coverImage);
+        }
+
+        const eventData: EventData = {
+          title: data.title,
+          description: data.description || "",
+          startTimestamp,
+          endTimestamp,
+          venue: data.venue,
+          address: data.address,
+          category: data.category,
+          isOnline: data.isOnline,
+          capacity: data.capacity,
+          coverImage: coverImageUrl,
+        };
+
+        return this.fetch('/api/events', {
+          method: 'POST',
+          body: JSON.stringify(eventData),
+        });
+      } catch (error) {
+        console.error("Error in events.create:", error);
+        throw error;
+      }
     },
 
     getMyEvents: async () => {
@@ -563,9 +578,9 @@ interface OrganizationResponse {
   stripeAccountUpdatedAt?: string;
 }
 
-interface FormEventData {
+interface RawFormEventData {
   title: string;
-  description: string;
+  description?: string;
   date: Date;
   startTime: {
     hour: string;
@@ -581,6 +596,19 @@ interface FormEventData {
   isOnline: boolean;
   capacity: number;
   coverImage?: File;
+}
+
+interface FormEventData {
+  title: string;
+  description?: string;
+  startTimestamp: string;
+  endTimestamp: string;
+  venue: string | null;
+  address: string | null;
+  category: string;
+  isOnline: boolean;
+  capacity: number;
+  coverImage?: string;
 }
 
 export interface Event extends EventData {
@@ -612,4 +640,4 @@ export interface Event extends EventData {
 export const apiClient = new ApiClient();
 
 // Export types for use in components
-export type { RegisterData, OrganizerApplicationData };
+export type { RegisterData, OrganizerApplicationData, RawFormEventData };
