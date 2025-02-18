@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
-import { ArrowLeft, Calendar, Clock, MapPin, AlertTriangle } from "lucide-react"
+import { ArrowLeft, Calendar, Clock, MapPin } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -49,16 +50,18 @@ export default function CheckoutPage({
   const [isLoading, setIsLoading] = useState(true)
   const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reservationStatus] = useState<'reserved'>('reserved')
 
   // Parse selected tickets from URL
   const selectedTickets = searchParams.get('tickets')
     ? JSON.parse(decodeURIComponent(searchParams.get('tickets')!))
-    : []
+    : [];
 
+  // Calculate total amount using the tickets from URL
   const totalAmount = selectedTickets.reduce(
-    (sum: number, ticket: any) => sum + ticket.price * ticket.quantity,
+    (sum: number, ticket: any) => sum + (ticket.price || 0) * ticket.quantity,
     0
-  )
+  );
 
   const fetchEvent = useCallback(async () => {
     let isCancelled = false;
@@ -89,6 +92,7 @@ export default function CheckoutPage({
     }
   }, [params.eventId])
 
+  // Fetch event details
   useEffect(() => {
     const cleanupFn = fetchEvent();
     return () => {
@@ -96,7 +100,7 @@ export default function CheckoutPage({
         if (cleanup) cleanup();
       });
     };
-  }, [fetchEvent])
+  }, [fetchEvent]);
 
   // Countdown timer
   useEffect(() => {
@@ -123,35 +127,17 @@ export default function CheckoutPage({
       setIsCheckingOut(true)
       setError(null)
 
-      if (totalAmount === 0) {
-        // Handle free tickets reservation
-        try {
-          const response = await apiClient.tickets.reserveFree({
-            eventId: params.eventId,
-            tickets: selectedTickets
-          })
+      // Process the purchase
+      await apiClient.tickets.purchase({
+        eventId: params.eventId,
+        tickets: selectedTickets.map((ticket: any) => ({
+          ticketId: ticket.id,
+          quantity: ticket.quantity
+        }))
+      });
 
-          // Redirect to success page with order details
-          router.push(`/checkout/success?eventId=${params.eventId}&orderId=${response.orderId}`)
-        } catch (error: any) {
-          setError(error.message || 'Failed to reserve free tickets')
-          setIsCheckingOut(false)
-        }
-      } else {
-        // Handle paid tickets with Stripe
-        try {
-          const response = await apiClient.checkout.createSession({
-            eventId: params.eventId,
-            tickets: selectedTickets
-          })
-
-          // Redirect to Stripe checkout
-          router.push(response.url)
-        } catch (error: any) {
-          setError(error.message || 'Failed to create checkout session')
-          setIsCheckingOut(false)
-        }
-      }
+      // If successful, redirect to success page
+      router.push(`/checkout/success?eventId=${params.eventId}`);
     } catch (error: any) {
       console.error('Checkout error:', error)
       setError(error.message || 'Failed to process checkout')
@@ -180,7 +166,7 @@ export default function CheckoutPage({
     return (
       <div className="container max-w-4xl py-8">
         <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
+          <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error || "Failed to load checkout"}</AlertDescription>
         </Alert>
         <Button
@@ -296,6 +282,7 @@ export default function CheckoutPage({
 
           {error && (
             <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -304,7 +291,7 @@ export default function CheckoutPage({
             className="w-full"
             size="lg"
             onClick={handleCheckout}
-            disabled={isCheckingOut}
+            disabled={isCheckingOut || reservationStatus !== 'reserved'}
           >
             {isCheckingOut ? (
               <>
@@ -331,14 +318,17 @@ export default function CheckoutPage({
                 </svg>
               </>
             ) : (
-              totalAmount === 0 ? 'Reserve Free Tickets' : 'Proceed to Payment'
+              totalAmount === 0 ? 'Confirm Free Tickets' : 'Proceed to Payment'
             )}
           </Button>
           <p className="text-xs text-center text-muted-foreground mt-2">
-            {totalAmount === 0
-              ? "Your tickets will be emailed to you after reservation"
-              : "You will be redirected to our secure payment provider"
-            }
+            {reservationStatus === 'reserved' ? (
+              totalAmount === 0
+                ? "Your tickets are reserved and will be confirmed upon completion"
+                : "Your tickets are reserved and will be confirmed after payment"
+            ) : (
+              "Failed to reserve tickets. Redirecting back to event page..."
+            )}
           </p>
         </div>
       </div>

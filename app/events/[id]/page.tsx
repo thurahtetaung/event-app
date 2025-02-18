@@ -14,43 +14,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { EventSlider } from "@/components/events/EventSlider"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ImageIcon } from "lucide-react"
+import { Event } from "@/lib/api-client"
 
 interface Organization {
   id: string;
   name: string;
   website?: string;
   socialLinks?: string;
-}
-
-interface Event {
-  id: string;
-  title: string;
-  description: string;
-  startTimestamp: string;
-  endTimestamp: string;
-  venue: string | null;
-  address: string | null;
-  category: string;
-  isOnline: boolean;
-  capacity: number;
-  coverImage?: string;
-  status?: "draft" | "published" | "cancelled";
-  organizationId: string;
-  organization?: Organization;
-  ticketTypes?: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    price: number;
-    quantity: number;
-    type: 'paid' | 'free';
-    saleStart: string;
-    saleEnd: string;
-    maxPerOrder?: number;
-    minPerOrder?: number;
-    status?: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
-    soldCount?: number;
-  }>;
 }
 
 interface EventPageProps {
@@ -386,7 +356,9 @@ export default function EventPage({ params }: EventPageProps) {
             {event.ticketTypes && event.ticketTypes.length > 0 && (
               <TicketSelection
                 eventId={event.id}
-                ticketTypes={event.ticketTypes}
+                ticketTypes={event.ticketTypes.filter((t): t is (typeof t & { status: 'on-sale' | 'paused' | 'sold-out' | 'scheduled' }) =>
+                  t.status !== undefined
+                )}
               />
             )}
           </div>

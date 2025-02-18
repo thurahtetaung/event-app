@@ -457,8 +457,20 @@ class ApiClient {
 
   // Tickets endpoints
   tickets = {
-    reserveFree: async (data: { eventId: string; tickets: Array<{ id: string; quantity: number }> }) => {
-      return this.fetch<{ orderId: string }>('/api/tickets/reserve-free', {
+    getAvailable: async (eventId: string, ticketTypeId: string) => {
+      return this.fetch<Array<{ id: string; status: string }>>(`/api/tickets/events/${eventId}/ticket-types/${ticketTypeId}`);
+    },
+    purchase: async (data: { eventId: string; tickets: Array<{ ticketId: string }> }) => {
+      return this.fetch('/api/tickets/purchase', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    getMyTickets: async () => {
+      return this.fetch('/api/tickets/my');
+    },
+    reserve: async (data: { eventId: string; tickets: Array<{ ticketTypeId: string; quantity: number }> }) => {
+      return this.fetch<{ success: boolean; message: string; tickets: Array<any> }>('/api/tickets/reserve', {
         method: 'POST',
         body: JSON.stringify(data),
       });
@@ -631,7 +643,7 @@ export interface Event extends EventData {
     saleEnd: string;
     maxPerOrder?: number;
     minPerOrder?: number;
-    status?: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
+    status: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
     soldCount?: number;
   }>;
 }

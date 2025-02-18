@@ -18,6 +18,9 @@ import { format, differenceInSeconds, isBefore } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
 
 interface TicketType {
   id: string
@@ -25,13 +28,13 @@ interface TicketType {
   description?: string
   price: number
   quantity: number
-  type: 'paid' | 'free'
-  saleStart: string
-  saleEnd: string
   maxPerOrder?: number
   minPerOrder?: number
-  status?: 'on-sale' | 'paused' | 'sold-out' | 'scheduled'
   soldCount?: number
+  type: 'paid' | 'free'
+  status: 'on-sale' | 'paused' | 'sold-out' | 'scheduled'
+  saleStart: string
+  saleEnd: string
 }
 
 interface TicketSelectionProps {
@@ -88,7 +91,8 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
   const [selectedTickets, setSelectedTickets] = useState<Record<string, number>>(
     Object.fromEntries(ticketTypes.map((ticket) => [ticket.id, 0]))
   )
-  const [isReserving, setIsReserving] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleQuantityChange = (ticketId: string, change: number) => {
     setSelectedTickets((prev) => {
@@ -113,33 +117,42 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
     0
   )
 
+  const hasSelectedTickets = Object.values(selectedTickets).some((qty) => qty > 0)
+
   const handleCheckout = async () => {
     try {
-      setIsReserving(true)
-      const selectedTicketTypes = Object.entries(selectedTickets)
+      setIsLoading(true)
+      setError(null)
+
+      // Convert selected tickets to the format expected by the API
+      const ticketsToReserve = Object.entries(selectedTickets)
         .filter(([_, quantity]) => quantity > 0)
-        .map(([id, quantity]) => {
-          const ticket = ticketTypes.find(t => t.id === id)
-          return {
-            id,
-            name: ticket?.name,
-            quantity,
-            price: ticket?.price || 0
-          }
-        })
+        .map(([ticketTypeId, quantity]) => ({
+          ticketTypeId,
+          quantity
+        }));
 
-      // Calculate total items
-      const totalItems = Object.values(selectedTickets).reduce((sum, qty) => sum + qty, 0)
+      // Call the API to reserve tickets
+      const reservationResult = await apiClient.tickets.reserve({
+        eventId,
+        tickets: ticketsToReserve
+      });
 
-      // Note: Don't reset isReserving as we want to show loading state during navigation
-      router.push(`/checkout/${eventId}?tickets=${encodeURIComponent(JSON.stringify(selectedTicketTypes))}`)
+      if (!reservationResult.success) {
+        throw new Error(reservationResult.message || 'Failed to reserve tickets');
+      }
+
+      // Encode the tickets data for the URL
+      const ticketsParam = encodeURIComponent(JSON.stringify(reservationResult.tickets));
+
+      // Redirect to checkout page with selected tickets
+      await router.push(`/checkout/${eventId}?tickets=${ticketsParam}`);
     } catch (error) {
-      console.error('Failed to proceed to checkout:', error)
-      setIsReserving(false) // Only reset on error
+      console.error('Error during ticket reservation:', error)
+      setError(error instanceof Error ? error.message : 'Failed to reserve tickets')
+      setIsLoading(false)
     }
   }
-
-  const hasSelectedTickets = Object.values(selectedTickets).some((quantity) => quantity > 0)
 
   return (
     <Card>
@@ -149,7 +162,13 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
           Tickets will be reserved for 10 minutes once you proceed to checkout
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         {ticketTypes.map((ticket) => {
           const availableQuantity = ticket.quantity - (ticket.soldCount || 0)
           const isAvailable = ticket.status === 'on-sale' && availableQuantity > 0
@@ -164,13 +183,14 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
                     {ticket.status && (
                       <Badge variant={
                         ticket.status === 'on-sale' ? 'default' :
-                        ticket.status === 'sold-out' ? 'destructive' :
-                        'secondary'
+                        ticket.status === 'scheduled' ? 'secondary' :
+                        ticket.status === 'paused' ? 'outline' :
+                        'destructive'
                       }>
                         {ticket.status === 'on-sale' ? 'On Sale' :
-                         ticket.status === 'sold-out' ? 'Sold Out' :
                          ticket.status === 'scheduled' ? 'Coming Soon' :
-                         'Sale Ended'}
+                         ticket.status === 'paused' ? 'Paused' :
+                         'Sold Out'}
                       </Badge>
                     )}
                   </div>
@@ -197,7 +217,7 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
                     variant="outline"
                     size="icon"
                     onClick={() => handleQuantityChange(ticket.id, -1)}
-                    disabled={!selectedTickets[ticket.id] || !isAvailable}
+                    disabled={!selectedTickets[ticket.id] || !isAvailable || isLoading}
                   >
                     <MinusIcon className="h-4 w-4" />
                   </Button>
@@ -213,7 +233,8 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
                     disabled={
                       !isAvailable ||
                       (ticket.maxPerOrder && selectedTickets[ticket.id] >= ticket.maxPerOrder) ||
-                      selectedTickets[ticket.id] >= availableQuantity
+                      selectedTickets[ticket.id] >= availableQuantity ||
+                      isLoading
                     }
                   >
                     <PlusIcon className="h-4 w-4" />
@@ -249,14 +270,14 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
           </div>
         </div>
         <Button
-          className="w-full"
+          className="w-full relative"
           size="lg"
-          disabled={!hasSelectedTickets || isReserving}
+          disabled={!hasSelectedTickets || isLoading}
           onClick={handleCheckout}
         >
-          {isReserving ? (
+          {isLoading ? (
             <>
-              <span className="mr-2">Reserving Tickets...</span>
+              <span className="mr-2">Processing...</span>
               <svg
                 className="animate-spin h-4 w-4"
                 xmlns="http://www.w3.org/2000/svg"

@@ -123,36 +123,16 @@ export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps)
       onSuccess?.()
     } catch (error: any) {
       console.error("Error saving ticket:", error)
+      // Display the specific validation error from the API
+      const errorMessage = error.response?.data?.error || error.message
+      toast.error(errorMessage || (initialData ? "Failed to update ticket type" : "Failed to create ticket type"))
 
-      // Extract error message directly from the error
-      const errorMessage = error.message || (initialData ? "Failed to update ticket type" : "Failed to create ticket type");
-
-      // Show error in toast
-      toast.error(errorMessage);
-
-      // Set form field errors based on the error message
-      if (errorMessage.toLowerCase().includes('quantity') || errorMessage.toLowerCase().includes('capacity')) {
+      // If it's a validation error related to quantity, set the form error
+      if (errorMessage?.toLowerCase().includes('quantity') || errorMessage?.toLowerCase().includes('capacity')) {
         form.setError('quantity', {
           type: 'manual',
           message: errorMessage
-        });
-      } else if (errorMessage.toLowerCase().includes('price')) {
-        form.setError('price', {
-          type: 'manual',
-          message: errorMessage
-        });
-      } else if (errorMessage.toLowerCase().includes('sale')) {
-        if (errorMessage.toLowerCase().includes('start')) {
-          form.setError('saleStartDate', {
-            type: 'manual',
-            message: errorMessage
-          });
-        } else if (errorMessage.toLowerCase().includes('end')) {
-          form.setError('saleEndDate', {
-            type: 'manual',
-            message: errorMessage
-          });
-        }
+        })
       }
     } finally {
       setIsLoading(false)

@@ -154,59 +154,9 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
       toast.success('Event updated successfully');
       router.refresh();
       onSuccess?.(eventData);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating event:', error);
-
-      // Extract error message from the API response
-      let errorMessage: string;
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (typeof error.message === 'string') {
-        errorMessage = error.message;
-      } else {
-        errorMessage = 'Failed to update event';
-      }
-
-      // Show error in toast
-      toast.error(errorMessage);
-
-      // Set form field errors based on the error message
-      if (errorMessage.toLowerCase().includes('capacity')) {
-        form.setError('capacity', {
-          type: 'manual',
-          message: errorMessage
-        });
-      } else if (errorMessage.toLowerCase().includes('venue') || errorMessage.toLowerCase().includes('address')) {
-        if (errorMessage.toLowerCase().includes('venue')) {
-          form.setError('venue', {
-            type: 'manual',
-            message: errorMessage
-          });
-        }
-        if (errorMessage.toLowerCase().includes('address')) {
-          form.setError('address', {
-            type: 'manual',
-            message: errorMessage
-          });
-        }
-      } else if (errorMessage.toLowerCase().includes('time') || errorMessage.toLowerCase().includes('date')) {
-        if (errorMessage.toLowerCase().includes('start')) {
-          form.setError('startTime', {
-            type: 'manual',
-            message: errorMessage
-          });
-        } else if (errorMessage.toLowerCase().includes('end')) {
-          form.setError('endTime', {
-            type: 'manual',
-            message: errorMessage
-          });
-        } else {
-          form.setError('date', {
-            type: 'manual',
-            message: errorMessage
-          });
-        }
-      }
+      toast.error('Failed to update event');
     } finally {
       setIsLoading(false);
     }
