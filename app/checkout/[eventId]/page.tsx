@@ -127,17 +127,27 @@ export default function CheckoutPage({
       setIsCheckingOut(true)
       setError(null)
 
-      // Process the purchase
-      await apiClient.tickets.purchase({
+      // Process the purchase - send ticket type IDs and quantities
+      const ticketsToProcess = selectedTickets.map((ticket: any) => ({
+        ticketTypeId: ticket.ticketTypeId,
+        quantity: ticket.quantity
+      }));
+
+      const purchaseResult = await apiClient.tickets.purchase({
         eventId: params.eventId,
-        tickets: selectedTickets.map((ticket: any) => ({
-          ticketId: ticket.id,
-          quantity: ticket.quantity
-        }))
+        tickets: ticketsToProcess
       });
 
-      // If successful, redirect to success page
-      router.push(`/checkout/success?eventId=${params.eventId}`);
+      if (purchaseResult.isFree) {
+        // For free tickets, redirect to success page
+        router.push(`/checkout/success?eventId=${params.eventId}`);
+      } else {
+        // For paid tickets, redirect to Stripe checkout
+        if (!purchaseResult.checkoutUrl) {
+          throw new Error('No checkout URL provided for paid tickets');
+        }
+        window.location.href = purchaseResult.checkoutUrl;
+      }
     } catch (error: any) {
       console.error('Checkout error:', error)
       setError(error.message || 'Failed to process checkout')
@@ -295,7 +305,7 @@ export default function CheckoutPage({
           >
             {isCheckingOut ? (
               <>
-                <span className="mr-2">{totalAmount === 0 ? 'Reserving...' : 'Processing...'}</span>
+                <span className="mr-2">Processing...</span>
                 <svg
                   className="animate-spin h-4 w-4"
                   xmlns="http://www.w3.org/2000/svg"

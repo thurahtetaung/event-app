@@ -460,20 +460,50 @@ class ApiClient {
     getAvailable: async (eventId: string, ticketTypeId: string) => {
       return this.fetch<Array<{ id: string; status: string }>>(`/api/tickets/events/${eventId}/ticket-types/${ticketTypeId}`);
     },
-    purchase: async (data: { eventId: string; tickets: Array<{ ticketId: string }> }) => {
-      return this.fetch('/api/tickets/purchase', {
+    purchase: async (data: { eventId: string; tickets: Array<{ ticketTypeId: string; quantity: number }> }) => {
+      return this.fetch<PurchaseResult>('/api/tickets/purchase', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     getMyTickets: async () => {
-      return this.fetch('/api/tickets/my');
+      return this.fetch<Array<{
+        ticket: {
+          id: string;
+          status: string;
+          price: number;
+          bookedAt?: string;
+        };
+        event: {
+          id: string;
+          title: string;
+          startTimestamp: string;
+          endTimestamp: string;
+          venue: string | null;
+          address: string | null;
+          isOnline: boolean;
+          coverImage?: string;
+          organization?: {
+            name: string;
+          };
+        };
+        ticketType: {
+          id: string;
+          name: string;
+          type: 'paid' | 'free';
+        };
+      }>>('/api/tickets/my');
     },
     reserve: async (data: { eventId: string; tickets: Array<{ ticketTypeId: string; quantity: number }> }) => {
       return this.fetch<{ success: boolean; message: string; tickets: Array<any> }>('/api/tickets/reserve', {
         method: 'POST',
         body: JSON.stringify(data),
       });
+    },
+    getAccessToken: async (eventId: string, ticketId: string) => {
+      return this.fetch<{ accessToken: string }>(
+        `/api/tickets/events/${eventId}/tickets/${ticketId}/access-token`
+      );
     },
   };
 
@@ -646,6 +676,17 @@ export interface Event extends EventData {
     status: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
     soldCount?: number;
   }>;
+}
+
+interface PurchaseResult {
+  success: boolean;
+  message?: string;
+  order: {
+    id: string;
+    status: 'pending' | 'completed' | 'failed';
+  };
+  checkoutUrl?: string;
+  isFree: boolean;
 }
 
 // Create and export a singleton instance

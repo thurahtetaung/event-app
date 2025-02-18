@@ -94,6 +94,10 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const MAX_TICKETS_PER_ORDER = 10;
+  const totalSelectedTickets = Object.values(selectedTickets).reduce((sum, qty) => sum + qty, 0);
+  const remainingTickets = MAX_TICKETS_PER_ORDER - totalSelectedTickets;
+
   const handleQuantityChange = (ticketId: string, change: number) => {
     setSelectedTickets((prev) => {
       const ticket = ticketTypes.find((t) => t.id === ticketId)
@@ -101,6 +105,18 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
 
       const currentQuantity = prev[ticketId] || 0
       const newQuantity = currentQuantity + change
+      const newTotalTickets = totalSelectedTickets + change
+
+      // Validate against global order limit
+      if (newTotalTickets > MAX_TICKETS_PER_ORDER) {
+        setError(`Maximum ${MAX_TICKETS_PER_ORDER} tickets allowed per order`);
+        return prev;
+      }
+
+      // Clear error if we're reducing quantity
+      if (change < 0) {
+        setError(null);
+      }
 
       // Validate against min/max per order and available quantity
       if (newQuantity < 0) return prev
@@ -145,7 +161,7 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
       // Encode the tickets data for the URL
       const ticketsParam = encodeURIComponent(JSON.stringify(reservationResult.tickets));
 
-      // Redirect to checkout page with selected tickets
+      // Always redirect to checkout page first
       await router.push(`/checkout/${eventId}?tickets=${ticketsParam}`);
     } catch (error) {
       console.error('Error during ticket reservation:', error)
@@ -158,8 +174,17 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
     <Card>
       <CardHeader>
         <CardTitle>Select Tickets</CardTitle>
-        <CardDescription>
-          Tickets will be reserved for 10 minutes once you proceed to checkout
+        <CardDescription className="space-y-1">
+          <p>Tickets will be reserved for 10 minutes once you proceed to checkout</p>
+          <p className="text-sm font-medium">
+            {remainingTickets === MAX_TICKETS_PER_ORDER ? (
+              `Maximum ${MAX_TICKETS_PER_ORDER} tickets per order`
+            ) : remainingTickets > 0 ? (
+              `You can add ${remainingTickets} more ticket${remainingTickets === 1 ? '' : 's'}`
+            ) : (
+              'Maximum tickets per order reached'
+            )}
+          </p>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -173,6 +198,11 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
           const availableQuantity = ticket.quantity - (ticket.soldCount || 0)
           const isAvailable = ticket.status === 'on-sale' && availableQuantity > 0
           const soldPercentage = ((ticket.soldCount || 0) / ticket.quantity) * 100
+          const maxAllowed = Math.min(
+            availableQuantity,
+            ticket.maxPerOrder || Infinity,
+            MAX_TICKETS_PER_ORDER - (totalSelectedTickets - (selectedTickets[ticket.id] || 0))
+          )
 
           return (
             <div key={ticket.id} className="space-y-3">
@@ -232,18 +262,17 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
                     onClick={() => handleQuantityChange(ticket.id, 1)}
                     disabled={
                       !isAvailable ||
-                      (ticket.maxPerOrder && selectedTickets[ticket.id] >= ticket.maxPerOrder) ||
-                      selectedTickets[ticket.id] >= availableQuantity ||
+                      selectedTickets[ticket.id] >= maxAllowed ||
                       isLoading
                     }
                   >
                     <PlusIcon className="h-4 w-4" />
                   </Button>
-                  {ticket.maxPerOrder && (
-                    <span className="text-xs text-muted-foreground">
-                      Max {ticket.maxPerOrder} per order
-                    </span>
-                  )}
+                  <div className="text-xs text-muted-foreground">
+                    {ticket.maxPerOrder && (
+                      <span>Max {ticket.maxPerOrder} per order</span>
+                    )}
+                  </div>
                 </div>
                 {ticket.minPerOrder && selectedTickets[ticket.id] > 0 && selectedTickets[ticket.id] < ticket.minPerOrder && (
                   <p className="text-xs text-destructive">
@@ -261,7 +290,7 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
             <div className="text-lg font-semibold">Total</div>
             {hasSelectedTickets && (
               <p className="text-sm text-muted-foreground">
-                {Object.values(selectedTickets).reduce((sum, qty) => sum + qty, 0)} tickets selected
+                {totalSelectedTickets} ticket{totalSelectedTickets === 1 ? '' : 's'} selected
               </p>
             )}
           </div>
