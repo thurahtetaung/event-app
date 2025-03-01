@@ -456,7 +456,7 @@ export default function OrganizerSettingsPage() {
                       </div>
                       {organization && (
                         <StripeConnectButton
-                          isConnected={stripeStatus?.isConnected}
+                          isConnected={stripeStatus?.isConnected || false}
                           onConnectionChange={handleStripeConnectionChange}
                           organizationId={organization.id}
                         />

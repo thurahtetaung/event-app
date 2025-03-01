@@ -64,13 +64,13 @@ export default function LoginPage() {
         </div>
         <p className="text-center text-sm text-muted-foreground">
           By continuing, you agree to our{" "}
-          <a href="/terms" className="font-medium underline hover:text-primary">
+          <Link href="/terms" className="font-medium underline hover:text-primary">
             Terms
-          </a>{" "}
+          </Link>{" "}
           and{" "}
-          <a href="/privacy" className="font-medium underline hover:text-primary">
+          <Link href="/privacy" className="font-medium underline hover:text-primary">
             Privacy Policy
-          </a>
+          </Link>
         </p>
       </div>
     </div>

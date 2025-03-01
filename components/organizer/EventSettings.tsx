@@ -32,7 +32,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { apiClient } from "@/lib/api-client"
 import { useRouter } from "next/navigation"
@@ -55,7 +55,7 @@ const formSchema = z.object({
   }),
   venue: z.string().nullable(),
   address: z.string().nullable(),
-  category: z.string(),
+  categoryId: z.string().min(1, "Category is required"),
   isOnline: z.boolean(),
   capacity: z.number().min(1),
   coverImage: z.instanceof(File).optional(),
@@ -81,7 +81,12 @@ interface EventSettingsProps {
     endTimestamp: string
     venue: string | null
     address: string | null
-    category: string
+    categoryId: string
+    categoryObject?: {
+      id: string
+      name: string
+      icon: string
+    }
     isOnline: boolean
     capacity: number
     coverImage?: string
@@ -97,6 +102,21 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const [coverImagePreview, setCoverImagePreview] = useState<string>(event.coverImage || "")
+  const [categories, setCategories] = useState<Array<{id: string, name: string, icon: string}>>([])
+
+  // Fetch categories for dropdown
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await apiClient.categories.getAll()
+        setCategories(data)
+      } catch (error) {
+        console.error("Failed to fetch categories:", error)
+        toast.error("Failed to load categories")
+      }
+    }
+    fetchCategories()
+  }, [])
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -114,7 +134,7 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
       },
       venue: event.venue,
       address: event.address,
-      category: event.category,
+      categoryId: event.categoryId,
       isOnline: event.isOnline,
       capacity: event.capacity,
       status: event.status,
@@ -143,7 +163,7 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
         endTimestamp,
         venue: data.venue,
         address: data.address,
-        category: data.category,
+        categoryId: data.categoryId,
         isOnline: data.isOnline,
         capacity: data.capacity,
         status: data.status,
@@ -251,8 +271,40 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea {...field} />
+                    <Textarea
+                      placeholder="Describe your event"
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                    />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="categoryId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

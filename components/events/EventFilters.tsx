@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
+import { useState, useEffect } from "react"
 import * as z from "zod"
 import { CalendarIcon, Clock } from "lucide-react"
 import { format } from "date-fns"
@@ -17,8 +18,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { apiClient } from "@/lib/api-client"
 
-const EVENT_CATEGORIES = [
+// Default categories in case API fails
+const DEFAULT_CATEGORIES = [
   "All Categories",
   "Conference",
   "Workshop",
@@ -45,6 +48,7 @@ type FilterValues = z.infer<typeof formSchema>
 export function EventFilters() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES)
 
   const form = useForm<FilterValues>({
     resolver: zodResolver(formSchema),
@@ -59,6 +63,22 @@ export function EventFilters() {
       isInPerson: searchParams.get("isInPerson") === "true",
     },
   })
+
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await apiClient.categories.getAll()
+        // Add "All Categories" as the first option
+        setCategories(["All Categories", ...data.map(cat => cat.name)])
+      } catch (error) {
+        console.error("Failed to fetch categories:", error)
+        // Keep using default categories on error
+      }
+    }
+
+    fetchCategories()
+  }, [])
 
   function onSubmit(values: FilterValues) {
     const params = new URLSearchParams()
@@ -124,7 +144,7 @@ export function EventFilters() {
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
-                    {EVENT_CATEGORIES.map((category) => (
+                    {categories.map((category) => (
                       <SelectItem key={category} value={category}>
                         {category}
                       </SelectItem>

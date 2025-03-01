@@ -24,7 +24,12 @@ interface Event {
   endTimestamp: string
   venue: string | null
   address: string | null
-  category: string
+  categoryId: string
+  categoryObject?: {
+    id: string
+    name: string
+    icon: string
+  }
   isOnline: boolean
   capacity: number
   status: "draft" | "published" | "cancelled"

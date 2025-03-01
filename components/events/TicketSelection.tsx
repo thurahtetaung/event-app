@@ -30,11 +30,12 @@ interface TicketType {
   quantity: number
   maxPerOrder?: number
   minPerOrder?: number
-  soldCount?: number
+  soldCount: number
   type: 'paid' | 'free'
   status: 'on-sale' | 'paused' | 'sold-out' | 'scheduled'
   saleStart: string
   saleEnd: string
+  totalSoldCount?: number
 }
 
 interface TicketSelectionProps {
@@ -121,7 +122,7 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
       // Validate against min/max per order and available quantity
       if (newQuantity < 0) return prev
       if (ticket.maxPerOrder && newQuantity > ticket.maxPerOrder) return prev
-      if (newQuantity > (ticket.quantity - (ticket.soldCount || 0))) return prev
+      if (newQuantity > (ticket.quantity - ticket.soldCount)) return prev
       if (ticket.minPerOrder && newQuantity > 0 && newQuantity < ticket.minPerOrder) return prev
 
       return { ...prev, [ticketId]: newQuantity }
@@ -195,14 +196,16 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
           </Alert>
         )}
         {ticketTypes.map((ticket) => {
-          const availableQuantity = ticket.quantity - (ticket.soldCount || 0)
-          const isAvailable = ticket.status === 'on-sale' && availableQuantity > 0
-          const soldPercentage = ((ticket.soldCount || 0) / ticket.quantity) * 100
+          // Check if we have the new totalSoldCount property, otherwise fall back to soldCount
+          const effectiveSoldCount = ('totalSoldCount' in ticket ? ticket.totalSoldCount : ticket.soldCount) ?? 0;
+          const availableQuantity = ticket.quantity - effectiveSoldCount;
+          const isAvailable = ticket.status === 'on-sale' && availableQuantity > 0;
+          const soldPercentage = (effectiveSoldCount / ticket.quantity) * 100;
           const maxAllowed = Math.min(
             availableQuantity,
             ticket.maxPerOrder || Infinity,
             MAX_TICKETS_PER_ORDER - (totalSelectedTickets - (selectedTickets[ticket.id] || 0))
-          )
+          );
 
           return (
             <div key={ticket.id} className="space-y-3">

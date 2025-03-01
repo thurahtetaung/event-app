@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { toast } from "sonner"
@@ -37,7 +37,8 @@ import { uploadEventCoverImage } from "@/lib/supabase-client"
 
 interface FormEventData extends RawFormEventData {}
 
-const EVENT_CATEGORIES = [
+// Default categories in case API fails
+const DEFAULT_CATEGORIES = [
   "Conference",
   "Workshop",
   "Concert",
@@ -46,6 +47,13 @@ const EVENT_CATEGORIES = [
   "Networking",
   "Other",
 ]
+
+// Define a Category interface
+interface Category {
+  id: string;
+  name: string;
+  icon: string;
+}
 
 // These fields are just for UI preview and not part of the form submission
 interface PreviewFields {
@@ -70,7 +78,7 @@ const formSchema = z.object({
   }),
   venue: z.string().nullable(),
   address: z.string().nullable(),
-  category: z.string().min(1, "Category is required"),
+  categoryId: z.string().min(1, "Category is required"),
   isOnline: z.boolean(),
   capacity: z.number().min(1, "Capacity must be at least 1"),
   coverImage: z.instanceof(File).optional(),
@@ -82,6 +90,7 @@ export function EventCreationForm() {
   const router = useRouter()
   const [coverImagePreview, setCoverImagePreview] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -99,11 +108,31 @@ export function EventCreationForm() {
     },
     venue: "",
     address: "",
-    category: "",
+    categoryId: "",
     isOnline: false,
       capacity: 100,
     },
   })
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await apiClient.categories.getAll()
+        setCategories(data)
+      } catch (error) {
+        console.error("Failed to fetch categories:", error)
+        // Create default categories with fake IDs for fallback
+        setCategories(DEFAULT_CATEGORIES.map(name => ({
+          id: name.toLowerCase().replace(/\s+/g, '-'),
+          name,
+          icon: 'Globe'
+        })))
+      }
+    }
+
+    fetchCategories()
+  }, [])
 
   const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -139,7 +168,7 @@ export function EventCreationForm() {
         },
         venue: values.isOnline ? null : values.venue,
         address: values.isOnline ? null : values.address,
-        category: values.category,
+        categoryId: values.categoryId,
         isOnline: values.isOnline,
         capacity: Number(values.capacity),
         coverImage: values.coverImage,
@@ -298,7 +327,7 @@ export function EventCreationForm() {
 
               <FormField
                 control={form.control}
-                name="category"
+                name="categoryId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Category</FormLabel>
@@ -312,9 +341,9 @@ export function EventCreationForm() {
                 </SelectTrigger>
                       </FormControl>
                 <SelectContent>
-                  {EVENT_CATEGORIES.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

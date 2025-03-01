@@ -9,42 +9,57 @@ import {
   Tooltip,
 } from "recharts"
 
-// In a real app, this would be fetched from an API
-const data = [
+interface TicketSalesChartProps {
+  data: Array<{
+    month: string;
+    count: number;
+  }>;
+}
+
+// Fallback data in case no data is provided
+const fallbackData = [
   {
     name: "Jan",
-    total: 234,
+    total: 0,
   },
   {
     name: "Feb",
-    total: 345,
+    total: 0,
   },
   {
     name: "Mar",
-    total: 289,
+    total: 0,
   },
   {
     name: "Apr",
-    total: 456,
+    total: 0,
   },
   {
     name: "May",
-    total: 678,
+    total: 0,
   },
   {
     name: "Jun",
-    total: 567,
+    total: 0,
   },
   {
     name: "Jul",
-    total: 789,
+    total: 0,
   },
 ]
 
-export function TicketSalesChart() {
+export function TicketSalesChart({ data }: TicketSalesChartProps) {
+  // Transform data to the format expected by the chart
+  const chartData = data.length > 0
+    ? data.map(item => ({
+        name: item.month.split('-')[1], // Extract month from 'YYYY-MM'
+        total: item.count,
+      }))
+    : fallbackData;
+
   return (
     <ResponsiveContainer width="100%" height={350}>
-      <BarChart data={data}>
+      <BarChart data={chartData}>
         <XAxis
           dataKey="name"
           stroke="#888888"

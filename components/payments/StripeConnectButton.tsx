@@ -25,6 +25,10 @@ export default function StripeConnectButton({
   const router = useRouter()
 
   useEffect(() => {
+    setConnected(isConnected)
+  }, [isConnected])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
 
     const success = searchParams.get("success")

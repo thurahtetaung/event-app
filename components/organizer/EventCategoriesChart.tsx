@@ -2,20 +2,25 @@
 
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 
-const data = [
-  { category: "Music", count: 45 },
-  { category: "Technology", count: 38 },
-  { category: "Business", count: 32 },
-  { category: "Food & Drink", count: 28 },
-  { category: "Arts", count: 25 },
-  { category: "Sports", count: 22 },
-  { category: "Education", count: 18 },
+interface EventCategoriesChartProps {
+  data: Array<{
+    category: string;
+    count: number;
+  }>;
+}
+
+// Fallback data if no data is provided
+const fallbackData = [
+  { category: "No categories", count: 0 },
 ]
 
-export function EventCategoriesChart() {
+export function EventCategoriesChart({ data }: EventCategoriesChartProps) {
+  // Use provided data or fallback if empty
+  const chartData = data.length > 0 ? data : fallbackData;
+
   return (
     <ResponsiveContainer width="100%" height={400}>
-      <BarChart data={data} layout="vertical" margin={{ left: 100 }}>
+      <BarChart data={chartData} layout="vertical" margin={{ left: 100 }}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis type="number" />
         <YAxis type="category" dataKey="category" />

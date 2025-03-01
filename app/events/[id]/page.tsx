@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Calendar, Clock, MapPin, Share2, Building2, Facebook, Instagram, Twitter, Linkedin, Globe, Users } from "lucide-react"
+import { Calendar, Clock, MapPin, Share2, Building2, Facebook, Instagram, Twitter, Linkedin, Globe, Users, TagIcon } from "lucide-react"
 import { TicketSelection } from "@/components/events/TicketSelection"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -58,7 +58,7 @@ export default function EventPage({ params }: EventPageProps) {
 
         // Fetch similar events in the same category
         const similar = await apiClient.events.getPublicEvents({
-          category: data.category,
+          category: data.categoryObject?.name,
           sort: "date"
         })
         if (!isCancelled) {
@@ -257,6 +257,23 @@ export default function EventPage({ params }: EventPageProps) {
     );
   };
 
+  const metadata = {
+    title: `${event.title} | EventHub`,
+    description: event.description || `Join us for ${event.title}`,
+    openGraph: {
+      title: `${event.title} | EventHub`,
+      description: event.description || `Join us for ${event.title}`,
+      images: [event.coverImage || '/images/event-placeholder.jpg'],
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${event.title} | EventHub`,
+      description: event.description || `Join us for ${event.title}`,
+      images: [event.coverImage || '/images/event-placeholder.jpg'],
+    },
+  };
+
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       {/* Event Header */}
@@ -264,9 +281,10 @@ export default function EventPage({ params }: EventPageProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="text-3xl font-bold">{event.title}</h1>
-            <Badge variant="secondary" className="text-sm">
-              {event.category}
-            </Badge>
+            <div className="flex items-center gap-1 text-sm text-gray-500">
+              <TagIcon className="h-4 w-4" />
+              {event.categoryObject?.name || 'Uncategorized'}
+            </div>
           </div>
           <div className="flex items-center space-x-4">
             <Button variant="outline" size="icon">

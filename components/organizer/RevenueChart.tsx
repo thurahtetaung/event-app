@@ -9,42 +9,57 @@ import {
   Tooltip,
 } from "recharts"
 
-// In a real app, this would be fetched from an API
-const data = [
+interface RevenueChartProps {
+  data: Array<{
+    month: string;
+    revenue: number;
+  }>;
+}
+
+// Fallback data in case no data is provided
+const fallbackData = [
   {
     name: "Jan",
-    total: 2500,
+    total: 0,
   },
   {
     name: "Feb",
-    total: 3500,
+    total: 0,
   },
   {
     name: "Mar",
-    total: 4200,
+    total: 0,
   },
   {
     name: "Apr",
-    total: 6800,
+    total: 0,
   },
   {
     name: "May",
-    total: 8900,
+    total: 0,
   },
   {
     name: "Jun",
-    total: 7600,
+    total: 0,
   },
   {
     name: "Jul",
-    total: 9200,
+    total: 0,
   },
 ]
 
-export function RevenueChart() {
+export function RevenueChart({ data }: RevenueChartProps) {
+  // Transform data to the format expected by the chart
+  const chartData = data.length > 0
+    ? data.map(item => ({
+        name: item.month.split('-')[1], // Extract month from 'YYYY-MM'
+        total: item.revenue,
+      }))
+    : fallbackData;
+
   return (
     <ResponsiveContainer width="100%" height={350}>
-      <LineChart data={data}>
+      <LineChart data={chartData}>
         <XAxis
           dataKey="name"
           stroke="#888888"

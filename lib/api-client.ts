@@ -268,7 +268,7 @@ class ApiClient {
           endTimestamp,
           venue: data.venue,
           address: data.address,
-          category: data.category,
+          categoryId: data.categoryId,
           isOnline: data.isOnline,
           capacity: data.capacity,
           coverImage: coverImageUrl,
@@ -422,6 +422,9 @@ class ApiClient {
         body: JSON.stringify(parsedData),
       });
     },
+    getAnalytics: async (): Promise<OrganizationAnalytics> => {
+      return this.fetch('/api/organizations/me/analytics');
+    },
   };
 
   // Stripe endpoints
@@ -460,7 +463,11 @@ class ApiClient {
     getAvailable: async (eventId: string, ticketTypeId: string) => {
       return this.fetch<Array<{ id: string; status: string }>>(`/api/tickets/events/${eventId}/ticket-types/${ticketTypeId}`);
     },
-    purchase: async (data: { eventId: string; tickets: Array<{ ticketTypeId: string; quantity: number }> }) => {
+    purchase: async (data: {
+      eventId: string;
+      tickets: Array<{ ticketTypeId: string; quantity: number }>;
+      specificTicketIds?: string[];
+    }) => {
       return this.fetch<PurchaseResult>('/api/tickets/purchase', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -500,10 +507,25 @@ class ApiClient {
         body: JSON.stringify(data),
       });
     },
+    releaseReservations: async () => {
+      return this.fetch<{ success: boolean; message: string }>('/api/tickets/release-reservations', {
+        method: 'POST',
+        body: JSON.stringify({}), // Add empty object body to avoid Fastify error
+      });
+    },
     getAccessToken: async (eventId: string, ticketId: string) => {
       return this.fetch<{ accessToken: string }>(
         `/api/tickets/events/${eventId}/tickets/${ticketId}/access-token`
       );
+    },
+    // Add a method that returns the properly formatted URL and data for sendBeacon
+    getReleaseReservationsBeaconData: () => {
+      const token = Cookies.get('token');
+      return {
+        url: `${API_BASE_URL}/api/tickets/release-reservations`,
+        data: new Blob([JSON.stringify({})], { type: 'application/json' }),
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      };
     },
   };
 
@@ -513,6 +535,68 @@ class ApiClient {
       return this.fetch<{ url: string }>('/api/checkout/create-session', {
         method: 'POST',
         body: JSON.stringify(data),
+      });
+    },
+  };
+
+  // Categories endpoints
+  categories = {
+    getAll: async () => {
+      return this.fetch<Array<{
+        id: string;
+        name: string;
+        icon: string;
+        createdAt: string;
+        updatedAt: string;
+      }>>('/api/categories');
+    },
+
+    getById: async (id: string) => {
+      return this.fetch<{
+        id: string;
+        name: string;
+        icon: string;
+        createdAt: string;
+        updatedAt: string;
+      }>(`/api/categories/${id}`);
+    },
+
+    create: async (data: { name: string; icon?: string }) => {
+      return this.fetch<{
+        id: string;
+        name: string;
+        icon: string;
+        createdAt: string;
+        updatedAt: string;
+      }>('/api/categories', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+
+    update: async (id: string, data: { name?: string; icon?: string }) => {
+      return this.fetch<{
+        id: string;
+        name: string;
+        icon: string;
+        createdAt: string;
+        updatedAt: string;
+      }>(`/api/categories/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+
+    delete: async (id: string) => {
+      return this.fetch<{
+        id: string;
+        name: string;
+        icon: string;
+        createdAt: string;
+        updatedAt: string;
+      }>(`/api/categories/${id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({}),
       });
     },
   };
@@ -561,7 +645,7 @@ export interface EventData {
   endTimestamp: string;
   venue: string | null;
   address: string | null;
-  category: string;
+  categoryId: string;
   isOnline: boolean;
   capacity: number;
   coverImage?: string;
@@ -634,7 +718,7 @@ interface RawFormEventData {
   };
   venue: string | null;
   address: string | null;
-  category: string;
+  categoryId: string;
   isOnline: boolean;
   capacity: number;
   coverImage?: File;
@@ -647,7 +731,7 @@ interface FormEventData {
   endTimestamp: string;
   venue: string | null;
   address: string | null;
-  category: string;
+  categoryId: string;
   isOnline: boolean;
   capacity: number;
   coverImage?: string;
@@ -662,6 +746,11 @@ export interface Event extends EventData {
     website?: string;
     socialLinks?: string;
   };
+  categoryObject?: {
+    id: string;
+    name: string;
+    icon: string;
+  };
   ticketTypes?: Array<{
     id: string;
     name: string;
@@ -674,7 +763,7 @@ export interface Event extends EventData {
     maxPerOrder?: number;
     minPerOrder?: number;
     status: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
-    soldCount?: number;
+    soldCount: number;
   }>;
 }
 
@@ -689,8 +778,41 @@ interface PurchaseResult {
   isFree: boolean;
 }
 
+interface OrganizationAnalytics {
+  totalEvents: number;
+  totalAttendees: number;
+  totalRevenue: number;
+  ticketsSold: number;
+  periodChanges: {
+    eventsChange: number;
+    attendeesChange: number;
+    revenueChange: number;
+    ticketsChange: number;
+  };
+  recentEvents?: Array<{
+    id: string;
+    title: string;
+    startTimestamp: string;
+    status: "draft" | "published" | "cancelled";
+    ticketsSold: number;
+    revenue: number;
+  }>;
+  eventsByCategory?: Array<{
+    category: string;
+    count: number;
+  }>;
+  revenueByMonth?: Array<{
+    month: string;
+    revenue: number;
+  }>;
+  ticketSalesByMonth?: Array<{
+    month: string;
+    count: number;
+  }>;
+}
+
 // Create and export a singleton instance
 export const apiClient = new ApiClient();
 
 // Export types for use in components
-export type { RegisterData, OrganizerApplicationData, RawFormEventData };
+export type { RegisterData, OrganizerApplicationData, RawFormEventData, OrganizationAnalytics };

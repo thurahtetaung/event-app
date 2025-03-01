@@ -1,49 +1,45 @@
 "use client"
 
 import Link from "next/link"
-import { CalendarDays, Users, ArrowRight } from "lucide-react"
+import { CalendarDays, Users, ArrowRight, DollarSign, Clock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { formatDistanceToNow } from "date-fns"
 
-// In a real app, this would be fetched from an API
-const events = [
+interface UpcomingEventsProps {
+  events: Array<{
+    id: string;
+    title: string;
+    startTimestamp: string;
+    status: "draft" | "published" | "cancelled";
+    ticketsSold: number;
+    revenue: number;
+  }>;
+}
+
+// Fallback data in case no events are provided
+const fallbackEvents = [
   {
-    id: "1",
-    title: "Tech Conference 2024",
-    date: "March 15, 2024",
-    time: "9:00 AM",
-    location: "Convention Center",
-    ticketsSold: 245,
-    capacity: 500,
-    status: "upcoming",
-  },
-  {
-    id: "2",
-    title: "Music Festival",
-    date: "April 1, 2024",
-    time: "4:00 PM",
-    location: "City Park",
-    ticketsSold: 890,
-    capacity: 1000,
-    status: "on-sale",
-  },
-  {
-    id: "3",
-    title: "Business Workshop",
-    date: "April 10, 2024",
-    time: "10:00 AM",
-    location: "Business Center",
-    ticketsSold: 48,
-    capacity: 100,
-    status: "draft",
-  },
+    id: "no-events",
+    title: "No upcoming events",
+    startTimestamp: new Date().toISOString(),
+    ticketsSold: 0,
+    revenue: 0,
+    status: "draft" as const,
+  }
 ]
 
-export function UpcomingEvents() {
+export function UpcomingEvents({ events = [] }: UpcomingEventsProps) {
+  const displayEvents = events.length > 0 ? events : fallbackEvents;
+
   return (
     <div className="space-y-8">
       <div className="space-y-4">
-        {events.map((event) => (
+        {displayEvents.map((event) => {
+          const eventDate = new Date(event.startTimestamp);
+          const timeUntil = formatDistanceToNow(eventDate, { addSuffix: true });
+
+          return (
           <div
             key={event.id}
             className="flex items-center justify-between space-x-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
@@ -55,24 +51,31 @@ export function UpcomingEvents() {
               <div className="space-y-1">
                 <p className="text-sm font-medium leading-none">{event.title}</p>
                 <div className="flex items-center text-sm text-muted-foreground">
-                  <span>{event.date}</span>
+                    <Clock className="mr-1 h-3 w-3" />
+                    <span>{timeUntil}</span>
                   <span className="px-2">•</span>
-                  <span>{event.time}</span>
+                    <span>{eventDate.toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center text-sm text-muted-foreground">
                     <Users className="mr-1 h-3 w-3" />
                     <span>
-                      {event.ticketsSold}/{event.capacity}
+                        {event.ticketsSold} tickets
+                      </span>
+                    </div>
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <DollarSign className="mr-1 h-3 w-3" />
+                      <span>
+                        ${event.revenue.toFixed(2)}
                     </span>
                   </div>
                   <Badge
                     variant={
-                      event.status === "on-sale"
+                        event.status === "published"
                         ? "success"
                         : event.status === "draft"
                         ? "outline"
-                        : "default"
+                          : "destructive"
                     }
                   >
                     {event.status}
@@ -80,14 +83,17 @@ export function UpcomingEvents() {
                 </div>
               </div>
             </div>
+              {event.id !== "no-events" && (
             <Link href={`/organizer/events/${event.id}`} className="shrink-0">
               <Button variant="ghost" size="icon">
                 <ArrowRight className="h-4 w-4" />
                 <span className="sr-only">View event details</span>
               </Button>
             </Link>
+              )}
           </div>
-        ))}
+          );
+        })}
       </div>
       <Button asChild variant="outline" className="w-full">
         <Link href="/organizer/events">

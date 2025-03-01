@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
@@ -30,11 +30,16 @@ interface Event {
   endTimestamp: string;
   venue: string | null;
   address: string | null;
-  category: string;
+  category?: string;
   isOnline: boolean;
   coverImage?: string;
   organization?: {
     name: string;
+  };
+  categoryObject?: {
+    id: string;
+    name: string;
+    icon: string;
   };
 }
 
@@ -51,6 +56,10 @@ export default function CheckoutPage({
   const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reservationStatus] = useState<'reserved'>('reserved')
+  // Use a ref to track if we should release tickets
+  const shouldReleaseTicketsRef = useRef(true)
+  // Use a ref to track initial mount
+  const isInitialMount = useRef(true)
 
   // Parse selected tickets from URL
   const selectedTickets = searchParams.get('tickets')
@@ -63,50 +72,106 @@ export default function CheckoutPage({
     0
   );
 
-  const fetchEvent = useCallback(async () => {
-    let isCancelled = false;
+  // Function to release reservations and go back to event page
+  const handleReleaseAndGoBack = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent default Link behavior
+    try {
+      // Call the API to release reserved tickets
+      await apiClient.tickets.releaseReservations();
+      // We've explicitly released tickets, so don't do it again on unmount
+      shouldReleaseTicketsRef.current = false;
+      console.log("Successfully released ticket reservations");
+    } catch (error) {
+      console.error("Error releasing ticket reservations:", error);
+    } finally {
+      // Always navigate back to event page
+      router.push(`/events/${params.eventId}`);
+    }
+  };
 
+  const fetchEvent = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
       const data = await apiClient.events.getById(params.eventId)
-      if (!isCancelled) {
-        setEvent(data)
-      }
+      setEvent(data)
     } catch (error: any) {
-      if (error.message === 'Request was cancelled' || isCancelled) {
-        return;
-      }
       console.error("Failed to fetch event:", error)
-      if (!isCancelled) {
-        setError(error.message || "Failed to load event details")
-      }
+      setError(error.message || "Failed to load event details")
     } finally {
-      if (!isCancelled) {
-        setIsLoading(false)
-      }
-    }
-
-    return () => {
-      isCancelled = true;
+      setIsLoading(false)
     }
   }, [params.eventId])
 
   // Fetch event details
   useEffect(() => {
-    const cleanupFn = fetchEvent();
-    return () => {
-      cleanupFn.then(cleanup => {
-        if (cleanup) cleanup();
-      });
-    };
+    fetchEvent();
+    // No cleanup needed for this effect
   }, [fetchEvent]);
+
+  // Handle page unload/navigation away
+  useEffect(() => {
+    // Mark initial mount as complete after the first effect
+    const currentIsInitialMount = isInitialMount.current;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    }
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Standard behavior to show confirmation dialog
+      e.preventDefault();
+      e.returnValue = '';
+
+      // Only release tickets on beforeunload if we need to
+      if (shouldReleaseTicketsRef.current) {
+        // Use the dedicated apiClient method for sendBeacon
+        const { url, data } = apiClient.tickets.getReleaseReservationsBeaconData();
+        navigator.sendBeacon(url, data);
+      }
+    };
+
+    // For normal unmounting, use the apiClient as originally intended
+    const handleUnmount = async () => {
+      try {
+        // Don't release tickets on initial mount or if explicitly prevented
+        if (!currentIsInitialMount && shouldReleaseTicketsRef.current) {
+          await apiClient.tickets.releaseReservations();
+          console.log("Released tickets on component unmount");
+        } else {
+          console.log("Skipped releasing tickets: " +
+            (currentIsInitialMount ? "initial mount" : "checkout in progress"));
+        }
+      } catch (error) {
+        console.error("Error releasing tickets on component unmount:", error);
+      }
+    };
+
+    // Add beforeunload listener
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Cleanup function
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      handleUnmount();
+    };
+  }, []);
 
   // Countdown timer
   useEffect(() => {
     if (timeLeft <= 0) {
-      router.push(`/events/${params.eventId}`)
-      return
+      try {
+        // Tickets will be released explicitly here, so don't do it on unmount
+        shouldReleaseTicketsRef.current = false;
+        // Release tickets when timer expires
+        apiClient.tickets.releaseReservations()
+          .then(() => console.log("Successfully released ticket reservations due to timeout"))
+          .catch(err => console.error("Error releasing ticket reservations:", err))
+          .finally(() => router.push(`/events/${params.eventId}`));
+      } catch (error) {
+        console.error("Error in timeout handler:", error);
+        router.push(`/events/${params.eventId}`);
+      }
+      return;
     }
 
     const timer = setInterval(() => {
@@ -127,15 +192,29 @@ export default function CheckoutPage({
       setIsCheckingOut(true)
       setError(null)
 
-      // Process the purchase - send ticket type IDs and quantities
-      const ticketsToProcess = selectedTickets.map((ticket: any) => ({
-        ticketTypeId: ticket.ticketTypeId,
-        quantity: ticket.quantity
-      }));
+      // Prevent ticket release on successful checkout
+      shouldReleaseTicketsRef.current = false;
 
+      // Extract all specific ticket IDs from the selected tickets
+      // This ensures we use EXACTLY the same tickets that were reserved
+      const allTicketIds = selectedTickets.flatMap((ticket: any) =>
+        ticket.ticketIds || []
+      );
+
+      if (allTicketIds.length === 0) {
+        console.warn("No specific ticket IDs found in selected tickets");
+      } else {
+        console.log(`Found ${allTicketIds.length} specific ticket IDs to purchase`);
+      }
+
+      // Process the purchase with the specific ticket IDs
       const purchaseResult = await apiClient.tickets.purchase({
         eventId: params.eventId,
-        tickets: ticketsToProcess
+        tickets: selectedTickets.map((ticket: any) => ({
+          ticketTypeId: ticket.ticketTypeId,
+          quantity: ticket.quantity
+        })),
+        specificTicketIds: allTicketIds.length > 0 ? allTicketIds : undefined
       });
 
       if (purchaseResult.isFree) {
@@ -181,13 +260,11 @@ export default function CheckoutPage({
         </Alert>
         <Button
           variant="ghost"
-          asChild
           className="mt-4"
+          onClick={handleReleaseAndGoBack}
         >
-          <Link href={`/events/${params.eventId}`}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Event
-          </Link>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Event
         </Button>
       </div>
     )
@@ -199,13 +276,11 @@ export default function CheckoutPage({
       <div className="mb-8">
         <Button
           variant="ghost"
-          asChild
           className="mb-4"
+          onClick={handleReleaseAndGoBack}
         >
-          <Link href={`/events/${params.eventId}`}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Event
-          </Link>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Event
         </Button>
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Checkout</h1>
@@ -267,7 +342,7 @@ export default function CheckoutPage({
             </div>
             <h2 className="text-xl font-semibold mb-2">{event.title}</h2>
             <Badge variant="secondary" className="mb-4">
-              {event.category}
+              {event.categoryObject?.name || event.category || 'Uncategorized'}
             </Badge>
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
