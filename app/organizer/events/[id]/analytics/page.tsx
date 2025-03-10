@@ -13,7 +13,9 @@ import {
   CalendarDays,
   DollarSign,
   Loader2,
+  AlertCircle,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { EventRevenueChart } from "@/components/organizer/EventRevenueChart"
 import { EventTicketSalesChart } from "@/components/organizer/EventTicketSalesChart"
 import { EventAttendeeChart } from "@/components/organizer/EventAttendeeChart"
@@ -64,11 +66,19 @@ export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) 
         if (isMounted) {
           setAnalytics(data as EventAnalytics)
         }
-      } catch (error) {
-        if (error instanceof Error && !error.message.includes('Request was cancelled')) {
-          console.error("Error fetching analytics:", error)
-          toast.error("Failed to load analytics data")
-          router.push(`/organizer/events/${params.id}`)
+      } catch (error: any) {
+        if (!isMounted) return;
+
+        console.error("Error fetching analytics:", error);
+
+        // Check for 404 not found errors
+        if (error?.status === 404 || error?.error?.message?.includes('not found')) {
+          toast.error("Event not found or analytics not available");
+          // Delay navigation slightly so the user can see the toast
+          setTimeout(() => router.push("/organizer/events"), 1500);
+        } else if (error instanceof Error && !error.message.includes('Request was cancelled')) {
+          toast.error("Failed to load analytics data");
+          router.push(`/organizer/events/${params.id}`);
         }
       } finally {
         if (isMounted) {
@@ -91,8 +101,23 @@ export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) 
       </div>
     )
   }
-
-  if (!analytics) return null
+  console.log(analytics)
+  if (!analytics) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-4">
+        <div className="flex flex-col items-center text-center max-w-md">
+          <AlertCircle className="h-16 w-16 text-muted-foreground mb-4" />
+          <h2 className="text-2xl font-bold">Analytics Not Available</h2>
+          <p className="text-muted-foreground mb-6">
+            The analytics for this event could not be loaded. The event may have been deleted or you don't have permission to view it.
+          </p>
+          <Button onClick={() => router.push("/organizer/events")}>
+            Go Back to Events
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   const stats = [
     {
@@ -173,7 +198,7 @@ export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) 
                 <CardTitle>Revenue Over Time</CardTitle>
               </CardHeader>
               <CardContent>
-                <DailySalesChart data={analytics.salesByDay} />
+                <EventRevenueChart data={analytics.salesByDay} />
               </CardContent>
             </Card>
             <Card>
@@ -223,7 +248,7 @@ export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) 
                                   : "secondary"
                               }
                             >
-                              {ticket.status}
+                              {ticket.status.replace("-", " ")}
                             </Badge>
                           </div>
                           <div>{ticket.totalSold}</div>
@@ -260,22 +285,7 @@ export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) 
                     <p className="text-xs">Sales data will appear here once tickets are sold</p>
                   </div>
                 ) : (
-                  <div className="rounded-lg border">
-                    <div className="grid grid-cols-3 gap-4 p-4 text-sm font-medium">
-                      <div>Date</div>
-                      <div>Tickets Sold</div>
-                      <div>Revenue</div>
-                    </div>
-                    <div className="divide-y">
-                      {analytics.salesByDay.map((day) => (
-                        <div key={day.date} className="grid grid-cols-3 gap-4 p-4 text-sm">
-                          <div>{new Date(day.date).toLocaleDateString()}</div>
-                          <div>{day.count}</div>
-                          <div>${day.revenue.toFixed(2)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <DailySalesChart data={analytics.salesByDay} />
                 )}
               </CardContent>
             </Card>

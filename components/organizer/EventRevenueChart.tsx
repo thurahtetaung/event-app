@@ -10,47 +10,17 @@ import {
   CartesianGrid,
 } from "recharts"
 
-interface EventRevenueChartProps {
-  eventId: string
+interface SaleData {
+  date: string
+  count: number
+  revenue: number
 }
 
-// Mock data - in a real app, this would be fetched based on eventId
-const data = [
-  {
-    date: "2024-03-01",
-    revenue: 500,
-  },
-  {
-    date: "2024-03-02",
-    revenue: 900,
-  },
-  {
-    date: "2024-03-03",
-    revenue: 1300,
-  },
-  {
-    date: "2024-03-04",
-    revenue: 2400,
-  },
-  {
-    date: "2024-03-05",
-    revenue: 3600,
-  },
-  {
-    date: "2024-03-06",
-    revenue: 4200,
-  },
-  {
-    date: "2024-03-07",
-    revenue: 5600,
-  },
-  {
-    date: "2024-03-08",
-    revenue: 6400,
-  },
-]
+interface EventRevenueChartProps {
+  data: SaleData[]
+}
 
-export function EventRevenueChart({ eventId }: EventRevenueChartProps) {
+export function EventRevenueChart({ data }: EventRevenueChartProps) {
   return (
     <ResponsiveContainer width="100%" height={350}>
       <LineChart data={data}>

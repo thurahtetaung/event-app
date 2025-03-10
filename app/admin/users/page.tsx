@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   useReactTable,
   getCoreRowModel,
@@ -26,100 +26,201 @@ import { DataTableToolbar } from "@/components/ui/data-table-toolbar"
 import { Badge } from "@/components/ui/badge"
 import { UserActions } from "@/components/admin/UserActions"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { apiClient } from "@/lib/api-client"
 
 interface User {
   id: string
-  name: string
+  firstName: string
+  lastName: string
   email: string
   status: string
   role: string
-  lastActive: string
-}
-
-// In a real app, this would be fetched from an API
-const mockUsers: User[] = Array.from({ length: 50 }, (_, i) => ({
-  id: `${i + 1}`,
-  name: `User ${i + 1}`,
-  email: `user${i + 1}@example.com`,
-  status: i % 3 === 0 ? "inactive" : "active",
-  role: i % 4 === 0 ? "admin" : i % 4 === 1 ? "organizer" : "user",
-  lastActive: "2 hours ago",
-}))
-
-const columns: ColumnDef<User>[] = [
-  {
-    accessorKey: "name",
-    header: "Name",
-  },
-  {
-    accessorKey: "email",
-    header: "Email",
-  },
-  {
-    accessorKey: "role",
-    header: "Role",
-    cell: ({ row }) => (
-      <span className="capitalize">{row.getValue("role")}</span>
-    ),
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => {
-      const status = row.getValue("status") as string
-      return (
-        <Badge
-          variant={status === "active" ? "success" : "destructive"}
-          className="capitalize"
-        >
-          {status}
-        </Badge>
-      )
-    },
-  },
-  {
-    accessorKey: "lastActive",
-    header: "Last Active",
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => (
-      <UserActions userId={row.original.id} userStatus={row.original.status} />
-    ),
-  },
-]
-
-const filters = [
-  {
-    key: "role",
-    label: "Role",
-    options: [
-      { label: "User", value: "user" },
-      { label: "Organizer", value: "organizer" },
-      { label: "Admin", value: "admin" },
-    ],
-  },
-  {
-    key: "status",
-    label: "Status",
-    options: [
-      { label: "Active", value: "active" },
-      { label: "Inactive", value: "inactive" },
-    ],
-  },
-]
-
-const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-  const searchValue = value.toLowerCase()
-  const name = row.getValue("name")?.toString().toLowerCase() ?? ""
-  const email = row.getValue("email")?.toString().toLowerCase() ?? ""
-
-  return name.includes(searchValue) || email.includes(searchValue)
+  createdAt: string
 }
 
 export default function UsersPage() {
-  const [data] = useState(mockUsers)
+  const [data, setData] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
 
+  // Function to fetch users from the API
+  const fetchUsers = async () => {
+    try {
+      console.log("Fetching users...");
+      const response = await apiClient.admin.users.getAll();
+      console.log("Users response:", response);
+      return response as User[];
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      throw error;
+    }
+  };
+
+  // Function to update user status
+  const updateUserStatus = async (userId: string, status: "active" | "inactive" | "banned") => {
+    try {
+      console.log(`Updating user ${userId} status to ${status}`);
+      const response = await apiClient.admin.users.updateUser(userId, { status });
+      console.log("Update response:", response);
+      return response;
+    } catch (error) {
+      console.error("Error updating user status:", error);
+      throw error;
+    }
+  };
+
+  // Function to delete a user
+  const deleteUser = async (userId: string) => {
+    try {
+      console.log(`Deleting user ${userId}`);
+      const response = await apiClient.admin.users.deleteUser(userId);
+      console.log("Delete response:", response);
+      return response;
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      throw error;
+    }
+  };
+
+  // Handler for status change
+  const handleStatusChange = async (userId: string, newStatus: "active" | "inactive" | "banned") => {
+    try {
+      console.log(`Status change requested for user ${userId} to ${newStatus}`);
+      const updatedUser = await updateUserStatus(userId, newStatus);
+
+      // Update the local state
+      setData(prev => prev.map(user =>
+        user.id === userId ? { ...user, status: newStatus } : user
+      ));
+
+      toast.success(`User status updated to ${newStatus}`);
+    } catch (error) {
+      toast.error("Failed to update user status");
+      console.error("Error in handleStatusChange:", error);
+    }
+  };
+
+  // Handler for user deletion
+  const handleDelete = async (userId: string) => {
+    try {
+      await deleteUser(userId);
+
+      // Update the local state
+      setData(prev => prev.filter(user => user.id !== userId));
+
+      toast.success("User deleted successfully");
+    } catch (error) {
+      toast.error("Failed to delete user");
+      console.error("Error in handleDelete:", error);
+    }
+  };
+
+  // Load users on component mount
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        setLoading(true);
+        const users = await fetchUsers();
+        setData(users);
+      } catch (error) {
+        toast.error("Failed to load users");
+        console.error("Error loading users:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUsers();
+  }, []);
+
+  // Define table columns
+  const columns: ColumnDef<User>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <span>{`${row.original.firstName} ${row.original.lastName}`}</span>
+      ),
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+    },
+    {
+      accessorKey: "role",
+      header: "Role",
+      cell: ({ row }) => (
+        <span className="capitalize">{row.getValue("role")}</span>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.getValue("status") as string;
+        return (
+          <Badge
+            variant={status === "active" ? "success" : "destructive"}
+            className="capitalize"
+          >
+            {status}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "createdAt",
+      header: "Joined",
+      cell: ({ row }) => {
+        const date = new Date(row.getValue("createdAt") as string);
+        return <span>{date.toLocaleDateString()}</span>;
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => (
+        <UserActions
+          userId={row.original.id}
+          userStatus={row.original.status}
+          onStatusChange={handleStatusChange}
+          onDelete={handleDelete}
+        />
+      ),
+    },
+  ];
+
+  // Define filters
+  const filters = [
+    {
+      key: "role",
+      label: "Role",
+      options: [
+        { label: "User", value: "user" },
+        { label: "Organizer", value: "organizer" },
+        { label: "Admin", value: "admin" },
+      ],
+    },
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { label: "Active", value: "active" },
+        { label: "Inactive", value: "inactive" },
+        { label: "Banned", value: "banned" },
+      ],
+    },
+  ];
+
+  // Define fuzzy filter function
+  const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
+    const searchValue = value.toLowerCase();
+    const name = `${row.original.firstName} ${row.original.lastName}`.toLowerCase();
+    const email = row.getValue("email")?.toString().toLowerCase() ?? "";
+
+    return name.includes(searchValue) || email.includes(searchValue);
+  };
+
+  // Initialize table
   const table = useReactTable({
     data,
     columns,
@@ -134,7 +235,7 @@ export default function UsersPage() {
         pageSize: 5,
       },
     },
-  })
+  });
 
   return (
     <div className="p-8 space-y-8">
@@ -166,7 +267,16 @@ export default function UsersPage() {
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.length ? (
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  Loading users...
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -203,6 +313,6 @@ export default function UsersPage() {
         </div>
       </Card>
     </div>
-  )
+  );
 }
 

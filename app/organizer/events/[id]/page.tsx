@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Calendar, Clock, MapPin, Users, Ticket, Globe, AlertCircle, Plus, Pencil } from "lucide-react"
+import { Calendar, Clock, MapPin, Users, Ticket, Globe, AlertCircle, Plus, Pencil, BadgeCheck } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { apiClient } from "@/lib/api-client"
@@ -101,11 +101,19 @@ export default function EventDetailPage() {
         if (isMounted) {
           setEvent(data as Event)
         }
-      } catch (error) {
-        if (error instanceof Error && !error.message.includes('Request was cancelled')) {
-          console.error("Error fetching event:", error)
-          toast.error("Failed to load event details")
-          router.push("/organizer/events")
+      } catch (error: any) {
+        if (!isMounted) return;
+
+        console.error("Error fetching event:", error);
+
+        // Check for 404 not found errors
+        if (error?.status === 404 || error?.error?.message?.includes('not found')) {
+          toast.error("Event not found. It may have been deleted or you don't have access to it.");
+          // Delay navigation slightly so the user can see the toast
+          setTimeout(() => router.push("/organizer/events"), 1500);
+        } else if (error instanceof Error && !error.message.includes('Request was cancelled')) {
+          toast.error("Failed to load event details");
+          router.push("/organizer/events");
         }
       } finally {
         if (isMounted) {
@@ -169,6 +177,23 @@ export default function EventDetailPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!isLoading && !event) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-4">
+        <div className="flex flex-col items-center text-center max-w-md">
+          <AlertCircle className="h-16 w-16 text-muted-foreground mb-4" />
+          <h2 className="text-2xl font-bold">Event Not Found</h2>
+          <p className="text-muted-foreground mb-6">
+            The event you're looking for doesn't exist or you don't have permission to view it.
+          </p>
+          <Button onClick={() => router.push("/organizer/events")}>
+            Go Back to Events
+          </Button>
         </div>
       </div>
     )
@@ -392,6 +417,7 @@ export default function EventDetailPage() {
           <Tabs defaultValue="tickets" className="space-y-4">
             <TabsList className="sticky top-0 bg-background z-10">
               <TabsTrigger value="tickets">Tickets</TabsTrigger>
+              <TabsTrigger value="validate">Validate Tickets</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
             <TabsContent value="tickets" className="space-y-4">
@@ -464,6 +490,21 @@ export default function EventDetailPage() {
                     </div>
                   ))
                 )}
+              </div>
+            </TabsContent>
+            <TabsContent value="validate" className="space-y-4">
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <BadgeCheck className="h-12 w-12 text-primary mb-4" />
+                <h3 className="font-medium text-lg mb-2">Ticket Validation</h3>
+                <p className="text-muted-foreground text-sm max-w-md mb-6">
+                  Validate tickets at your event entrance by checking ticket IDs or scanning QR codes.
+                  Ensure only valid tickets are accepted and track attendance.
+                </p>
+                <Button asChild>
+                  <Link href={`/organizer/events/${params.id}/validate`}>
+                    Go to Ticket Validation
+                  </Link>
+                </Button>
               </div>
             </TabsContent>
             <TabsContent value="settings">

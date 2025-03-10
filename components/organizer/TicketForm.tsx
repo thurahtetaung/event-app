@@ -99,6 +99,20 @@ export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps)
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
     try {
+      // Properly create date objects in local timezone
+      const createLocalDate = (date: Date): string => {
+        // Extract year, month, day from the local date
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const day = date.getDate();
+
+        // Create a new date at midnight in the local timezone
+        const localDate = new Date(year, month, day, 0, 0, 0, 0);
+
+        // Convert to ISO string for storage (this will convert to UTC)
+        return localDate.toISOString();
+      };
+
       // Format the data for API submission
       const ticketData = {
         name: values.name,
@@ -106,8 +120,8 @@ export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps)
         price: isFree ? 0 : Number(values.price),
         quantity: Number(values.quantity),
         type: isFree ? "free" as const : "paid" as const,
-        saleStart: values.saleStartDate.toISOString(),
-        saleEnd: values.saleEndDate.toISOString(),
+        saleStart: createLocalDate(values.saleStartDate),
+        saleEnd: createLocalDate(values.saleEndDate),
         maxPerOrder: values.hasMaximumPurchase ? Number(values.maximumPurchase) : undefined,
         minPerOrder: values.hasMinimumPurchase ? Number(values.minimumPurchase) : undefined,
       }
@@ -123,16 +137,53 @@ export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps)
       onSuccess?.()
     } catch (error: any) {
       console.error("Error saving ticket:", error)
-      // Display the specific validation error from the API
-      const errorMessage = error.response?.data?.error || error.message
-      toast.error(errorMessage || (initialData ? "Failed to update ticket type" : "Failed to create ticket type"))
 
-      // If it's a validation error related to quantity, set the form error
+      // Extract error message from the API response
+      let errorMessage: string;
+      if (error?.error?.message) {
+        errorMessage = error.error.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response?.data?.error;
+      } else if (typeof error.message === 'string') {
+        errorMessage = error.message;
+      } else {
+        errorMessage = initialData ? "Failed to update ticket type" : "Failed to create ticket type";
+      }
+
+      // Show error in toast
+      toast.error(errorMessage);
+
+      // Set form field errors based on the error message
       if (errorMessage?.toLowerCase().includes('quantity') || errorMessage?.toLowerCase().includes('capacity')) {
         form.setError('quantity', {
           type: 'manual',
           message: errorMessage
-        })
+        });
+      } else if (errorMessage?.toLowerCase().includes('price')) {
+        form.setError('price', {
+          type: 'manual',
+          message: errorMessage
+        });
+      } else if (errorMessage?.toLowerCase().includes('sale') && errorMessage?.toLowerCase().includes('start')) {
+        form.setError('saleStartDate', {
+          type: 'manual',
+          message: errorMessage
+        });
+      } else if (errorMessage?.toLowerCase().includes('sale') && errorMessage?.toLowerCase().includes('end')) {
+        form.setError('saleEndDate', {
+          type: 'manual',
+          message: errorMessage
+        });
+      } else if (errorMessage?.toLowerCase().includes('minimum')) {
+        form.setError('minimumPurchase', {
+          type: 'manual',
+          message: errorMessage
+        });
+      } else if (errorMessage?.toLowerCase().includes('maximum')) {
+        form.setError('maximumPurchase', {
+          type: 'manual',
+          message: errorMessage
+        });
       }
     } finally {
       setIsLoading(false)

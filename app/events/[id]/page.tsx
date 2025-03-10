@@ -7,7 +7,6 @@ import { Calendar, Clock, MapPin, Share2, Building2, Facebook, Instagram, Twitte
 import { TicketSelection } from "@/components/events/TicketSelection"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import { format } from "date-fns"
 import { useEffect, useState, useCallback } from "react"
 import { apiClient } from "@/lib/api-client"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -15,6 +14,7 @@ import { EventSlider } from "@/components/events/EventSlider"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ImageIcon } from "lucide-react"
 import { Event } from "@/lib/api-client"
+import { formatDate, formatTime, formatDateTimeRange } from "@/lib/utils"
 
 interface Organization {
   id: string;
@@ -59,7 +59,8 @@ export default function EventPage({ params }: EventPageProps) {
         // Fetch similar events in the same category
         const similar = await apiClient.events.getPublicEvents({
           category: data.categoryObject?.name,
-          sort: "date"
+          sort: "date",
+          limit: 10
         })
         if (!isCancelled) {
           setSimilarEvents(similar)
@@ -338,11 +339,10 @@ export default function EventPage({ params }: EventPageProps) {
                 <div>
                   <h3 className="font-medium">Date and time</h3>
                   <p className="text-sm text-gray-600">
-                    {format(new Date(event.startTimestamp), "EEE, MMM d, yyyy")}
+                    {formatDate(event.startTimestamp, "EEE, MMM d, yyyy")}
                   </p>
                   <p className="text-sm text-gray-600">
-                    {format(new Date(event.startTimestamp), "h:mm a")} -{" "}
-                    {format(new Date(event.endTimestamp), "h:mm a")}
+                    {formatTime(event.startTimestamp)} - {formatTime(event.endTimestamp)}
                   </p>
                 </div>
               </div>

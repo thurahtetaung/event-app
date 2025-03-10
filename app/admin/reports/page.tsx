@@ -41,7 +41,7 @@ export default function ReportsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Event Statistics</CardTitle>
-            <CardDescription>Event creation and ticket sales trends</CardDescription>
+            <CardDescription>Event Performance Metrics</CardDescription>
           </CardHeader>
           <CardContent>
             <EventsChart />

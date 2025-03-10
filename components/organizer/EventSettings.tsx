@@ -144,12 +144,25 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
-      const startTimestamp = new Date(
-        `${data.date.toISOString().split('T')[0]}T${data.startTime.hour}:${data.startTime.minute}:00`
-      ).toISOString();
-      const endTimestamp = new Date(
-        `${data.date.toISOString().split('T')[0]}T${data.endTime.hour}:${data.endTime.minute}:00`
-      ).toISOString();
+
+      // Get the user's selected date components in local timezone
+      const year = data.date.getFullYear();
+      const month = data.date.getMonth();
+      const day = data.date.getDate();
+
+      // Create the dates properly in local timezone by using the local date components
+      // and explicitly setting hours and minutes
+      let startTime = new Date(year, month, day,
+        parseInt(data.startTime.hour),
+        parseInt(data.startTime.minute), 0);
+
+      let endTime = new Date(year, month, day,
+        parseInt(data.endTime.hour),
+        parseInt(data.endTime.minute), 0);
+
+      // Convert to UTC timestamps for storage
+      const startTimestamp = startTime.toISOString();
+      const endTimestamp = endTime.toISOString();
 
       let coverImageUrl = event.coverImage;
       if (data.coverImage) {
@@ -174,9 +187,49 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
       toast.success('Event updated successfully');
       router.refresh();
       onSuccess?.(eventData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating event:', error);
-      toast.error('Failed to update event');
+
+      // Extract error message from the API response
+      let errorMessage = 'Failed to update event';
+
+      if (error?.error?.message) {
+        errorMessage = error.error.message;
+      } else if (typeof error.message === 'string') {
+        errorMessage = error.message;
+      }
+
+      // Show error in toast
+      toast.error(errorMessage);
+
+      // Map specific validation errors to form fields
+      if (errorMessage.toLowerCase().includes('end time')) {
+        form.setError('endTime', {
+          type: 'manual',
+          message: 'End time must be after start time'
+        });
+      } else if (errorMessage.toLowerCase().includes('venue')) {
+        form.setError('venue', {
+          type: 'manual',
+          message: 'Venue is required for in-person events'
+        });
+      } else if (errorMessage.toLowerCase().includes('address')) {
+        form.setError('address', {
+          type: 'manual',
+          message: 'Address is required for in-person events'
+        });
+      } else if (errorMessage.toLowerCase().includes('capacity')) {
+        form.setError('capacity', {
+          type: 'manual',
+          message: 'Invalid capacity value'
+        });
+      } else if (errorMessage.toLowerCase().includes('category')) {
+        form.setError('categoryId', {
+          type: 'manual',
+          message: 'Invalid category'
+        });
+      }
+
     } finally {
       setIsLoading(false);
     }

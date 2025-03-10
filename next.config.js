@@ -2,9 +2,23 @@
 const nextConfig = {
   // reactStrictMode: false, // Disable Strict Mode
   images: {
-    domains: [
-      'localhost',
-      'mahzkacvsmhusyznsoqf.supabase.co', // Supabase storage
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+      },
+      {
+        protocol: 'https',
+        hostname: 'mahzkacvsmhusyznsoqf.supabase.co', // Supabase storage
+      },
+      {
+        protocol: 'https',
+        hostname: 'ui-avatars.com', // For user avatars
+      },
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos', // For event images
+      },
     ],
   },
   typescript: {

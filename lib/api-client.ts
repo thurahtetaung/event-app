@@ -135,25 +135,76 @@ class ApiClient {
         return this.executeRequest<T>(endpoint, options, signal, true);
       }
 
-      const data = await response.json();
+      // Try to parse the JSON, but handle potential parsing errors
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        data = { message: 'Invalid response from server' };
+      }
 
       if (!response.ok) {
-        // Throw an error with the server's error message or a default message
-        throw new Error(data.message || data.error || 'An error occurred');
+        // Enhanced error object with specific handling for common status codes
+        const errorObject = {
+          status: response.status,
+          statusText: response.statusText,
+          message: data.message || data.error?.message || this.getDefaultErrorMessage(response.status),
+          error: data.error || data, // Include the full error object
+          endpoint
+        };
+
+        console.error(`API Error (${response.status}):`, errorObject);
+        throw errorObject;
       }
 
       return data;
     } catch (error: any) {
+      // If the error is already our enhanced error object, just rethrow it
+      if (error && typeof error === 'object' && 'status' in error) {
+        throw error;
+      }
+
+      // Handle refresh token errors
       if (error.message?.includes('refresh token')) {
         // Clear tokens on refresh error
         Cookies.remove('token');
         Cookies.remove('refreshToken');
       }
-      // Rethrow the error with a more specific message if it's a fetch error
+
+      // Handle network errors
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        throw new Error('Network error. Please check your connection.');
+        const networkError = {
+          status: 0,
+          message: 'Network error. Please check your connection.',
+          error: error,
+          endpoint
+        };
+        throw networkError;
       }
-      throw error;
+
+      // Otherwise wrap in our standard error format
+      const wrappedError = {
+        status: 0,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        error: error,
+        endpoint
+      };
+      throw wrappedError;
+    }
+  }
+
+  // Helper function to get default error messages by status code
+  private getDefaultErrorMessage(status: number): string {
+    switch (status) {
+      case 400: return 'Invalid request parameters';
+      case 401: return 'Authentication required';
+      case 403: return 'You don\'t have permission to access this resource';
+      case 404: return 'The requested resource was not found';
+      case 409: return 'Conflict with the current state of the resource';
+      case 422: return 'Validation failed';
+      case 429: return 'Too many requests, please try again later';
+      case 500: return 'Server error, please try again later';
+      default: return `Error ${status}`;
     }
   }
 
@@ -249,12 +300,29 @@ class ApiClient {
       }
 
       try {
-        const startTimestamp = new Date(
-          `${data.date.toISOString().split('T')[0]}T${data.startTime.hour}:${data.startTime.minute}:00`
-        ).toISOString();
-        const endTimestamp = new Date(
-          `${data.date.toISOString().split('T')[0]}T${data.endTime.hour}:${data.endTime.minute}:00`
-        ).toISOString();
+        // First, get the user's selected date components in local timezone
+        const year = data.date.getFullYear();
+        const month = data.date.getMonth();
+        const day = data.date.getDate();
+
+        // Create the dates properly in local timezone by using the local date components
+        // and explicitly setting hours and minutes
+        let startTime = new Date(year, month, day,
+          parseInt(data.startTime.hour),
+          parseInt(data.startTime.minute), 0);
+
+        let endTime = new Date(year, month, day,
+          parseInt(data.endTime.hour),
+          parseInt(data.endTime.minute), 0);
+
+        // Validate that end time is after start time
+        if (endTime <= startTime) {
+          throw new Error("End time must be after start time");
+        }
+
+        // Convert to UTC timestamps for storage
+        const startTimestamp = startTime.toISOString();
+        const endTimestamp = endTime.toISOString();
 
         let coverImageUrl;
         if (data.coverImage) {
@@ -380,6 +448,7 @@ class ApiClient {
       maxPrice?: string;
       isOnline?: boolean;
       isInPerson?: boolean;
+      limit?: number;
     }) => {
       const searchParams = new URLSearchParams();
       if (params?.category) searchParams.set('category', params.category);
@@ -391,6 +460,7 @@ class ApiClient {
       if (params?.maxPrice) searchParams.set('maxPrice', params.maxPrice);
       if (params?.isOnline) searchParams.set('isOnline', params.isOnline.toString());
       if (params?.isInPerson) searchParams.set('isInPerson', params.isInPerson.toString());
+      if (params?.limit) searchParams.set('limit', params.limit.toString());
 
       const queryString = searchParams.toString();
       return this.fetch<Event[]>(`/api/events${queryString ? `?${queryString}` : ''}`);
@@ -518,7 +588,86 @@ class ApiClient {
         `/api/tickets/events/${eventId}/tickets/${ticketId}/access-token`
       );
     },
-    // Add a method that returns the properly formatted URL and data for sendBeacon
+    verifyTicket: async (eventId: string, ticketId: string, accessToken: string) => {
+      return this.fetch<{
+        success: boolean;
+        ticket: {
+          id: string;
+          status: string;
+          isValidated: boolean;
+          validatedAt?: string;
+          ticketType: {
+            id: string;
+            name: string;
+            type: string;
+          };
+          user: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            email: string;
+          };
+          event: {
+            id: string;
+            title: string;
+          };
+        };
+      }>(
+        `/api/tickets/events/${eventId}/validate/${ticketId}?accessToken=${accessToken}`
+      );
+    },
+    validateTicket: async (eventId: string, ticketId: string, accessToken: string) => {
+      return this.fetch<{
+        success: boolean;
+        message: string;
+        ticket: {
+          id: string;
+          isValidated: boolean;
+          validatedAt: string;
+        }
+      }>(
+        `/api/tickets/events/${eventId}/validate/${ticketId}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ accessToken }),
+        }
+      );
+    },
+    getTicketDetails: async (eventId: string, ticketId: string) => {
+      return this.fetch<{
+        success: boolean;
+        ticket: {
+          id: string;
+          status: string;
+          isValidated: boolean;
+          validatedAt?: string;
+          bookedAt?: string;
+          price?: number;
+          ticketType: {
+            id: string;
+            name: string;
+            type: string;
+          };
+          user: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            email: string;
+            phoneNumber?: string;
+          };
+          event: {
+            id: string;
+            title: string;
+            startTimestamp?: string;
+            endTimestamp?: string;
+            venue?: string;
+            address?: string;
+          };
+        };
+      }>(
+        `/api/tickets/events/${eventId}/tickets/${ticketId}/details`
+      );
+    },
     getReleaseReservationsBeaconData: () => {
       const token = Cookies.get('token');
       return {
@@ -600,6 +749,123 @@ class ApiClient {
       });
     },
   };
+
+  // Add platform configurations endpoints
+  platformConfigurations = {
+    getAll: async () => {
+      return this.fetch<Array<{
+        id: string;
+        key: string;
+        value: string;
+        createdAt: string;
+        updatedAt: string;
+      }>>('/api/platform-configurations');
+    },
+
+    getByKey: async (key: string) => {
+      return this.fetch<{
+        id: string;
+        key: string;
+        value: string;
+        createdAt: string;
+        updatedAt: string;
+      }>(`/api/platform-configurations/${key}`);
+    },
+
+    update: async (key: string, value: string) => {
+      return this.fetch<{
+        id: string;
+        key: string;
+        value: string;
+        createdAt: string;
+        updatedAt: string;
+      }>(`/api/platform-configurations/${key}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ value }),
+      });
+    },
+
+    create: async (data: { key: string; value: string }) => {
+      return this.fetch<{
+        id: string;
+        key: string;
+        value: string;
+        createdAt: string;
+        updatedAt: string;
+      }>('/api/platform-configurations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  };
+
+  // Add admin endpoints
+  admin = {
+    // User management
+    users: {
+      getAll: async () => {
+        return this.fetch('/api/admin/users');
+      },
+
+      getById: async (id: string) => {
+        return this.fetch(`/api/admin/users/${id}`);
+      },
+
+      updateUser: async (id: string, data: {
+        role?: 'user' | 'organizer' | 'admin';
+        status?: 'active' | 'inactive' | 'banned';
+      }) => {
+        return this.fetch(`/api/admin/users/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+      },
+
+      deleteUser: async (id: string) => {
+        return this.fetch(`/api/admin/users/${id}`, {
+          method: 'DELETE',
+        });
+      },
+
+      // Get user statistics
+      getStats: async (id: string) => {
+        return this.fetch(`/api/admin/users/${id}/stats`);
+      },
+
+      // Get user events
+      getEvents: async (id: string) => {
+        return this.fetch(`/api/admin/users/${id}/events`);
+      },
+
+      // Get user transactions
+      getTransactions: async (id: string) => {
+        return this.fetch(`/api/admin/users/${id}/transactions`);
+      }
+    },
+
+    // Dashboard statistics
+    dashboard: {
+      getStats: async () => {
+        return this.fetch('/api/admin/dashboard/stats');
+      },
+
+      getMonthlyUserStats: async () => {
+        return this.fetch('/api/admin/dashboard/users/monthly');
+      }
+    }
+  };
+
+  async getAdminMonthlyRevenue(): Promise<MonthlyRevenueData[]> {
+    return this.fetch<MonthlyRevenueData[]>('/api/admin/reports/revenue');
+  }
+
+  async getAdminUserGrowth(): Promise<UserGrowthData[]> {
+    return this.fetch<UserGrowthData[]>('/api/admin/reports/users/growth');
+  }
+
+  async getAdminEventStatistics(): Promise<EventStatistics[]> {
+    return this.fetch<EventStatistics[]>('/api/admin/reports/events/statistics');
+  }
 }
 
 // Types
@@ -811,8 +1077,32 @@ interface OrganizationAnalytics {
   }>;
 }
 
+interface MonthlyRevenueData {
+  month: string;
+  year: number;
+  revenue: number;
+  totalSales: number;
+  ticketsSold: number;
+}
+
+interface UserGrowthData {
+  month: string;
+  year: number;
+  newUsers: number;
+  totalUsers: number;
+}
+
+interface EventStatistics {
+  month: string;
+  year: number;
+  newEvents: number;
+  ticketsSold: number;
+  averageTicketsPerEvent: number;
+  eventOccupancyRate: number;
+}
+
 // Create and export a singleton instance
 export const apiClient = new ApiClient();
 
 // Export types for use in components
-export type { RegisterData, OrganizerApplicationData, RawFormEventData, OrganizationAnalytics };
+export type { RegisterData, OrganizerApplicationData, RawFormEventData, OrganizationAnalytics, MonthlyRevenueData, UserGrowthData, EventStatistics };

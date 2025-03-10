@@ -14,6 +14,23 @@ interface PendingStats {
   newSinceYesterday: number
 }
 
+interface DashboardStats {
+  users: {
+    total: number
+    growthRate: number
+    newSinceLastMonth: number
+  }
+  revenue: {
+    total: number
+    growthRate: number
+    newSinceLastMonth: number
+  }
+  platformFee: {
+    currentRate: number
+    lastChanged: string
+  }
+}
+
 function UserStatsLoading() {
   return (
     <div className="h-[350px] flex items-center justify-center">
@@ -24,15 +41,22 @@ function UserStatsLoading() {
 
 export default function AdminDashboard() {
   const [pendingStats, setPendingStats] = useState<PendingStats | null>(null)
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     async function fetchStats() {
       try {
-        const data = await apiClient.organizerApplications.getPendingStats()
-        setPendingStats(data as PendingStats)
+        // Fetch both stats in parallel
+        const [pendingData, dashboardData] = await Promise.all([
+          apiClient.organizerApplications.getPendingStats(),
+          apiClient.admin.dashboard.getStats()
+        ])
+
+        setPendingStats(pendingData as PendingStats)
+        setDashboardStats(dashboardData as DashboardStats)
       } catch (error) {
-        console.error("Error fetching pending stats:", error)
+        console.error("Error fetching stats:", error)
       } finally {
         setIsLoading(false)
       }
@@ -55,8 +79,19 @@ export default function AdminDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">10,482</div>
-            <p className="text-xs text-muted-foreground">+20% from last month</p>
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{dashboardStats?.users.total || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  +{dashboardStats?.users.growthRate || 0}% from last month
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -86,8 +121,19 @@ export default function AdminDashboard() {
             <Settings className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2.5%</div>
-            <p className="text-xs text-muted-foreground">Last changed 30 days ago</p>
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{dashboardStats?.platformFee.currentRate || 0}%</div>
+                <p className="text-xs text-muted-foreground">
+                  Last changed {new Date(dashboardStats?.platformFee.lastChanged || Date.now()).toLocaleDateString()}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -96,8 +142,19 @@ export default function AdminDashboard() {
             <BarChart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$54,231.89</div>
-            <p className="text-xs text-muted-foreground">+19% from last month</p>
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">${dashboardStats?.revenue.total.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  {dashboardStats?.revenue.growthRate || 0}% from last month
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

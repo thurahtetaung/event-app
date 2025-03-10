@@ -82,7 +82,19 @@ const formSchema = z.object({
   isOnline: z.boolean(),
   capacity: z.number().min(1, "Capacity must be at least 1"),
   coverImage: z.instanceof(File).optional(),
-})
+}).refine((data) => {
+  // Convert hours and minutes to numbers
+  const startHour = parseInt(data.startTime.hour);
+  const startMinute = parseInt(data.startTime.minute);
+  const endHour = parseInt(data.endTime.hour);
+  const endMinute = parseInt(data.endTime.minute);
+
+  // Check if end time is after start time
+  return (endHour > startHour) || (endHour === startHour && endMinute > startMinute);
+}, {
+  message: "End time must be after start time",
+  path: ["endTime"], // Show error on the end time field
+});
 
 type FormValues = z.infer<typeof formSchema>
 
@@ -182,7 +194,9 @@ export function EventCreationForm() {
 
       // Extract error message from the API response
       let errorMessage: string;
-      if (error.response?.data?.error) {
+      if (error?.error?.message) {
+        errorMessage = error.error.message;
+      } else if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
       } else if (typeof error.message === 'string') {
         errorMessage = error.message;
@@ -213,7 +227,12 @@ export function EventCreationForm() {
           });
         }
       } else if (errorMessage.toLowerCase().includes('time') || errorMessage.toLowerCase().includes('date')) {
-        if (errorMessage.toLowerCase().includes('start')) {
+        if (errorMessage.toLowerCase().includes('end time')) {
+          form.setError('endTime', {
+            type: 'manual',
+            message: 'End time must be after start time'
+          });
+        } else if (errorMessage.toLowerCase().includes('start')) {
           form.setError('startTime', {
             type: 'manual',
             message: errorMessage
@@ -229,6 +248,15 @@ export function EventCreationForm() {
             message: errorMessage
           });
         }
+      } else if (errorMessage.toLowerCase().includes('category')) {
+        form.setError('categoryId', {
+          type: 'manual',
+          message: 'Please select a valid category'
+        });
+      } else if (errorMessage.toLowerCase().includes('organization')) {
+        // This is a special case error - redirect to organization creation
+        toast.error('You need to create an organization before creating events');
+        router.push('/organizer/organization');
       }
     } finally {
       setIsLoading(false)

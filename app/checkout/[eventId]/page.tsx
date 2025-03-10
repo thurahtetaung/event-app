@@ -14,6 +14,7 @@ import { apiClient } from "@/lib/api-client"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
+import { formatDate, formatTime } from "@/lib/utils"
 
 interface TicketType {
   id: string;
@@ -181,7 +182,8 @@ export default function CheckoutPage({
     return () => clearInterval(timer)
   }, [timeLeft, router, params.eventId])
 
-  const formatTime = (seconds: number) => {
+  // Format countdown timer display
+  const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`
@@ -286,7 +288,9 @@ export default function CheckoutPage({
           <h1 className="text-2xl font-bold">Checkout</h1>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Time remaining</p>
-            <p className="text-xl font-semibold">{formatTime(timeLeft)}</p>
+            {timeLeft > 0 && (
+              <p className="text-xl font-semibold">{formatCountdown(timeLeft)}</p>
+            )}
           </div>
         </div>
       </div>
@@ -347,13 +351,12 @@ export default function CheckoutPage({
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>{format(new Date(event.startTimestamp), "EEE, MMM d, yyyy")}</span>
+                <span>{formatDate(event.startTimestamp, "EEE, MMM d, yyyy")}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span>
-                  {format(new Date(event.startTimestamp), "h:mm a")} -{" "}
-                  {format(new Date(event.endTimestamp), "h:mm a")}
+                  {formatTime(event.startTimestamp)} - {formatTime(event.endTimestamp)}
                 </span>
               </div>
               <div className="flex items-center gap-2">

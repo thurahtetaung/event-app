@@ -1,59 +1,215 @@
-import type { Metadata } from "next"
+"use client"
+
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { notFound } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Mail, MapPin, Phone, Calendar, User2, CreditCard, Clock } from "lucide-react"
 import { UserActions } from "@/components/admin/UserActions"
+import { toast } from "sonner"
+import { apiClient } from "@/lib/api-client"
 
-export const metadata: Metadata = {
-  title: "User Details",
-  description: "View and manage user details",
-}
-
-// In a real app, fetch this data from your API
-const mockUser = {
-  id: "1",
-  name: "John Doe",
-  email: "john@example.com",
-  role: "user",
-  status: "active",
-  avatar: "/placeholder.jpg",
-  phone: "+1 (555) 123-4567",
-  location: "New York, USA",
-  joinDate: "January 15, 2024",
-  lastActive: "2 hours ago",
-  events: [
-    { id: "1", name: "Tech Conference 2024", date: "2024-03-15", status: "upcoming", price: 199.99 },
-    { id: "2", name: "Music Festival", date: "2024-02-01", status: "attended", price: 89.99 },
-    { id: "3", name: "Art Exhibition", date: "2024-01-20", status: "cancelled", price: 49.99 },
-  ],
-  transactions: [
-    { id: "1", event: "Tech Conference 2024", amount: 199.99, date: "2024-02-15", status: "completed" },
-    { id: "2", event: "Music Festival", amount: 89.99, date: "2024-01-01", status: "refunded" },
-    { id: "3", event: "Art Exhibition", amount: 49.99, date: "2024-01-20", status: "cancelled" },
-  ],
-  stats: {
-    totalSpent: 339.97,
-    eventsAttended: 5,
-    eventsUpcoming: 2,
-    eventsCancelled: 1,
-  },
-}
-
-interface UserDetailsPageProps {
-  params: {
+interface UserData {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  role: "user" | "organizer" | "admin"
+  status: "active" | "inactive" | "banned"
+  country: string
+  dateOfBirth: string
+  createdAt: string
+  events?: Array<{
     id: string
+    title: string
+    startTimestamp: string
+    status: string
+    totalTickets: number
+    ticketTypes: Array<{
+      id: string
+      name: string
+      count: number
+      price: number
+    }>
+  }>
+  transactions?: Array<{
+    id: string
+    eventTitle: string
+    amount: number
+    createdAt: string
+    status: string
+  }>
+  stats?: {
+    totalSpent: number
+    eventsAttended: number
+    eventsUpcoming: number
+    eventsCancelled: number
   }
 }
 
-export default function UserDetailsPage({ params }: UserDetailsPageProps) {
-  // In a real app, fetch user data here
-  const user = mockUser
-  if (!user) notFound()
+// Placeholder for user avatar
+const PLACEHOLDER_AVATAR = "https://ui-avatars.com/api/?background=random"
+
+// Helper function to format dates
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString)
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    return "Invalid date"
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric'
+  }).format(date)
+}
+
+export default function UserDetailsPage() {
+  const params = useParams()
+  const router = useRouter()
+  const [user, setUser] = useState<UserData | null>(null)
+  const [userStats, setUserStats] = useState<UserData['stats'] | null>(null)
+  const [userEvents, setUserEvents] = useState<UserData['events'] | null>(null)
+  const [userTransactions, setUserTransactions] = useState<UserData['transactions'] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [eventsLoading, setEventsLoading] = useState(true)
+  const [transactionsLoading, setTransactionsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch basic user data
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Directly call the backend API using the apiClient
+        const userData = await apiClient.admin.users.getById(params.id as string)
+        setUser(userData as UserData)
+      } catch (error) {
+        console.error("Error fetching user:", error)
+        setError("Failed to load user data. Please try again later.")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (params.id) {
+      fetchUser()
+    }
+  }, [params.id])
+
+  // Fetch user statistics
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      if (!params.id) return
+
+      try {
+        setStatsLoading(true)
+        const stats = await apiClient.admin.users.getStats(params.id as string)
+        setUserStats(stats as UserData['stats'])
+      } catch (error) {
+        console.error("Error fetching user stats:", error)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchUserStats()
+  }, [params.id])
+
+  // Fetch user events
+  useEffect(() => {
+    const fetchUserEvents = async () => {
+      if (!params.id) return
+
+      try {
+        setEventsLoading(true)
+        const events = await apiClient.admin.users.getEvents(params.id as string)
+        setUserEvents(events as UserData['events'])
+      } catch (error) {
+        console.error("Error fetching user events:", error)
+      } finally {
+        setEventsLoading(false)
+      }
+    }
+
+    fetchUserEvents()
+  }, [params.id])
+
+  // Fetch user transactions
+  useEffect(() => {
+    const fetchUserTransactions = async () => {
+      if (!params.id) return
+
+      try {
+        setTransactionsLoading(true)
+        const transactions = await apiClient.admin.users.getTransactions(params.id as string)
+        setUserTransactions(transactions as UserData['transactions'])
+      } catch (error) {
+        console.error("Error fetching user transactions:", error)
+      } finally {
+        setTransactionsLoading(false)
+      }
+    }
+
+    fetchUserTransactions()
+  }, [params.id])
+
+  const handleStatusChange = async (userId: string, newStatus: "active" | "inactive" | "banned") => {
+    try {
+      // Directly call the backend API using the apiClient
+      await apiClient.admin.users.updateUser(userId, { status: newStatus })
+
+      setUser(prev => prev ? { ...prev, status: newStatus } : null)
+      toast.success(`User status updated to ${newStatus}`)
+    } catch (error) {
+      toast.error("Failed to update user status")
+      console.error(error)
+    }
+  }
+
+  const handleDelete = async (userId: string) => {
+    try {
+      // Directly call the backend API using the apiClient
+      await apiClient.admin.users.deleteUser(userId)
+
+      toast.success("User deleted successfully")
+      router.push("/admin/users")
+    } catch (error) {
+      toast.error("Failed to delete user")
+      console.error(error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex justify-center">
+        <p>Loading user data...</p>
+      </div>
+    )
+  }
+
+  if (error || !user) {
+    return (
+      <div className="p-8 flex flex-col items-center">
+        <p className="text-destructive mb-4">{error || "User not found"}</p>
+        <Button variant="outline" asChild>
+          <Link href="/admin/users">Back to Users</Link>
+        </Button>
+      </div>
+    )
+  }
+
+  // Generate avatar URL with user's name
+  const avatarUrl = `${PLACEHOLDER_AVATAR}&name=${encodeURIComponent(user.firstName + ' ' + user.lastName)}`
 
   return (
     <div className="p-8 space-y-8">
@@ -74,8 +230,8 @@ export default function UserDetailsPage({ params }: UserDetailsPageProps) {
           <div className="flex items-start gap-6">
             <div className="relative h-24 w-24 rounded-full overflow-hidden bg-muted">
               <Image
-                src={user.avatar}
-                alt={user.name}
+                src={avatarUrl}
+                alt={`${user.firstName} ${user.lastName}`}
                 fill
                 className="object-cover"
               />
@@ -83,10 +239,15 @@ export default function UserDetailsPage({ params }: UserDetailsPageProps) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-semibold truncate">{user.name}</h2>
+                  <h2 className="text-2xl font-semibold truncate">{`${user.firstName} ${user.lastName}`}</h2>
                   <p className="text-muted-foreground">{user.email}</p>
                 </div>
-                <UserActions userId={user.id} userStatus={user.status} />
+                <UserActions
+                  userId={user.id}
+                  userStatus={user.status}
+                  onStatusChange={handleStatusChange}
+                  onDelete={handleDelete}
+                />
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -94,16 +255,16 @@ export default function UserDetailsPage({ params }: UserDetailsPageProps) {
                   <span className="capitalize">{user.role}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  <span>{user.phone}</span>
+                  <Mail className="h-4 w-4" />
+                  <span>{user.email}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4" />
-                  <span>{user.location}</span>
+                  <span>{user.country}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  <span>Joined {user.joinDate}</span>
+                  <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
                 </div>
               </div>
             </div>
@@ -119,8 +280,16 @@ export default function UserDetailsPage({ params }: UserDetailsPageProps) {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${user.stats.totalSpent.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Lifetime spending</p>
+            {statsLoading ? (
+              <div className="h-9 flex items-center">
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">${userStats?.totalSpent?.toFixed(2) || "0.00"}</div>
+                <p className="text-xs text-muted-foreground">Lifetime spending</p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -129,8 +298,16 @@ export default function UserDetailsPage({ params }: UserDetailsPageProps) {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{user.stats.eventsAttended}</div>
-            <p className="text-xs text-muted-foreground">Total events attended</p>
+            {statsLoading ? (
+              <div className="h-9 flex items-center">
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{userStats?.eventsAttended || 0}</div>
+                <p className="text-xs text-muted-foreground">Total events attended</p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -139,18 +316,34 @@ export default function UserDetailsPage({ params }: UserDetailsPageProps) {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{user.stats.eventsUpcoming}</div>
-            <p className="text-xs text-muted-foreground">Events booked</p>
+            {statsLoading ? (
+              <div className="h-9 flex items-center">
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{userStats?.eventsUpcoming || 0}</div>
+                <p className="text-xs text-muted-foreground">Events booked</p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Last Active</CardTitle>
+            <CardTitle className="text-sm font-medium">Cancelled Events</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{user.lastActive}</div>
-            <p className="text-xs text-muted-foreground">Time since last activity</p>
+            {statsLoading ? (
+              <div className="h-9 flex items-center">
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{userStats?.eventsCancelled || 0}</div>
+                <p className="text-xs text-muted-foreground">Cancelled bookings</p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -169,33 +362,15 @@ export default function UserDetailsPage({ params }: UserDetailsPageProps) {
               <CardDescription>Events the user has registered for or attended</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {user.events.map((event) => (
-                  <div
-                    key={event.id}
-                    className="flex items-center justify-between p-4 rounded-lg border"
-                  >
-                    <div>
-                      <h4 className="font-medium">{event.name}</h4>
-                      <p className="text-sm text-muted-foreground">{event.date}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">${event.price.toFixed(2)}</p>
-                      <Badge
-                        variant={
-                          event.status === "upcoming"
-                            ? "secondary"
-                            : event.status === "attended"
-                            ? "default"
-                            : "destructive"
-                        }
-                      >
-                        {event.status}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {eventsLoading ? (
+                <div className="text-center py-6">
+                  <p className="text-muted-foreground">Loading events...</p>
+                </div>
+              ) : userEvents && userEvents.length > 0 ? (
+                <EventsSection events={userEvents} />
+              ) : (
+                <p className="text-center text-muted-foreground py-4">No events found</p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -207,31 +382,81 @@ export default function UserDetailsPage({ params }: UserDetailsPageProps) {
               <CardDescription>User's payment history and refunds</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {user.transactions.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    className="flex items-center justify-between p-4 rounded-lg border"
-                  >
-                    <div>
-                      <h4 className="font-medium">{transaction.event}</h4>
-                      <p className="text-sm text-muted-foreground">{transaction.date}</p>
+              {transactionsLoading ? (
+                <div className="text-center py-6">
+                  <p className="text-muted-foreground">Loading transactions...</p>
+                </div>
+              ) : userTransactions && userTransactions.length > 0 ? (
+                <div className="space-y-4">
+                  {userTransactions.map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className="flex items-center justify-between p-4 rounded-lg border"
+                    >
+                      <div>
+                        <h4 className="font-medium">{transaction.eventTitle}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {formatDate(transaction.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">${transaction.amount.toFixed(2)}</p>
+                        <Badge
+                          variant={transaction.status === "completed" ? "secondary" : "destructive"}
+                        >
+                          {transaction.status}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium">${transaction.amount.toFixed(2)}</p>
-                      <Badge
-                        variant={transaction.status === "completed" ? "secondary" : "destructive"}
-                      >
-                        {transaction.status}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-4">No transactions found</p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  )
+}
+
+const EventsSection = ({ events }: { events: UserData["events"] }) => {
+  if (!events || events.length === 0) {
+    return (
+      <div className="rounded-md border p-4">
+        <p className="text-muted-foreground">No events found for this user.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {events.map((event) => (
+        <div key={event.id} className="rounded-md border p-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="font-medium">{event.title}</h3>
+              <p className="text-sm text-muted-foreground">
+                {formatDate(event.startTimestamp)}
+              </p>
+              <div className="mt-2 space-y-1">
+                <p className="text-sm">
+                  <span className="font-medium">Total tickets:</span> {event.totalTickets}
+                </p>
+                {event.ticketTypes.map((type) => (
+                  <p key={type.id} className="text-sm">
+                    <span className="font-medium">{type.name}:</span> {type.count} x ${type.price.toFixed(2)}
+                  </p>
+                ))}
+              </div>
+            </div>
+            <Badge variant={event.status === "attended" ? "default" : "outline"}>
+              {event.status === "attended" ? "Attended" : "Upcoming"}
+            </Badge>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

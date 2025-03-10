@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { CalendarDays, Users, ArrowRight, DollarSign, Clock } from "lucide-react"
+import { CalendarDays, Users, ArrowRight, DollarSign, Clock, BadgeCheck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatDistanceToNow } from "date-fns"
@@ -84,12 +84,20 @@ export function UpcomingEvents({ events = [] }: UpcomingEventsProps) {
               </div>
             </div>
               {event.id !== "no-events" && (
-            <Link href={`/organizer/events/${event.id}`} className="shrink-0">
-              <Button variant="ghost" size="icon">
-                <ArrowRight className="h-4 w-4" />
-                <span className="sr-only">View event details</span>
-              </Button>
-            </Link>
+                <div className="flex gap-2 shrink-0">
+                  <Link href={`/organizer/events/${event.id}/validate`} className="shrink-0">
+                    <Button variant="outline" size="icon" title="Validate Tickets">
+                      <BadgeCheck className="h-4 w-4" />
+                      <span className="sr-only">Validate tickets</span>
+                    </Button>
+                  </Link>
+                  <Link href={`/organizer/events/${event.id}`} className="shrink-0">
+                    <Button variant="ghost" size="icon">
+                      <ArrowRight className="h-4 w-4" />
+                      <span className="sr-only">View event details</span>
+                    </Button>
+                  </Link>
+                </div>
               )}
           </div>
           );

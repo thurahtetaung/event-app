@@ -55,9 +55,10 @@ export function CategoryManagement() {
   const [isEditing, setIsEditing] = useState(false)
   const [currentCategory, setCurrentCategory] = useState<Partial<Category> | null>(null)
 
-  // Delete confirmation state
+  // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null)
+  const [deleteDialogError, setDeleteDialogError] = useState<string | null>(null)
 
   // Fetch categories on mount
   useEffect(() => {
@@ -103,6 +104,7 @@ export function CategoryManagement() {
   const handleDeleteDialogClose = () => {
     setDeleteDialogOpen(false)
     setCategoryToDelete(null)
+    setDeleteDialogError(null)
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,7 +159,7 @@ export function CategoryManagement() {
     if (!categoryToDelete) return
 
     setLoading(true)
-    setError(null)
+    setDeleteDialogError(null)
 
     try {
       await apiClient.categories.delete(categoryToDelete.id)
@@ -166,7 +168,9 @@ export function CategoryManagement() {
       await fetchCategories()
       handleDeleteDialogClose()
     } catch (err: any) {
-      setError(err.message || 'Failed to delete category')
+      // Extract the error message from the API response structure
+      const errorMessage = err.error?.message || err.message || 'Failed to delete category'
+      setDeleteDialogError(errorMessage)
       console.error(err)
     } finally {
       setLoading(false)
@@ -318,6 +322,14 @@ export function CategoryManagement() {
               This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
+
+          {deleteDialogError && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{deleteDialogError}</AlertDescription>
+            </Alert>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={handleDeleteDialogClose}>
