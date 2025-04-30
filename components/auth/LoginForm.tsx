@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { OtpVerification } from "./OtpVerification"
+import { apiClient } from "@/lib/api-client"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -24,32 +25,21 @@ export default function LoginForm() {
 
     setIsLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/users/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        if (data.message?.includes("complete your registration")) {
-          setIsCompletingRegistration(true)
-          setShowOtpInput(true)
-          toast.success("Please verify your email to complete registration")
-          return
-        }
-        throw new Error(data.message || "Failed to send OTP")
-      }
-
+      await apiClient.auth.login(email)
       setShowOtpInput(true)
       toast.success("OTP sent to your email")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error)
+      if (error.message?.includes("complete your registration")) {
+        setIsCompletingRegistration(true)
+        setShowOtpInput(true)
+        toast.success("Please verify your email to complete registration")
+        return
+      }
       if (!isCompletingRegistration) {
         setShowOtpInput(false)
       }
-      toast.error(error instanceof Error ? error.message : "Failed to send OTP")
+      toast.error(error.message || "Failed to send OTP")
     } finally {
       setIsLoading(false)
     }
@@ -58,34 +48,29 @@ export default function LoginForm() {
   const handleVerifyOtp = async (otp: string) => {
     setIsLoading(true)
     try {
-      const endpoint = isCompletingRegistration ? "verifyRegistration" : "verifyLogin"
-      const response = await fetch(`${API_URL}/api/users/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp }),
-      })
+      const response = isCompletingRegistration
+        ? await apiClient.auth.verifyRegistration(email, otp)
+        : await apiClient.auth.verifyLogin(email, otp)
 
-      const data = await response.json()
+      // Debug information - check token structure
+      console.log('Auth response structure:', Object.keys(response));
 
-      if (!response.ok) {
-        throw new Error(data.message || "Invalid OTP")
+      // The tokens are nested in response.data for this API
+      const accessToken = response.data?.access_token;
+      const refreshToken = response.data?.refresh_token;
+
+      if (!accessToken || !refreshToken) {
+        console.error('Missing tokens in response:', response);
+        toast.error("Authentication error: Invalid token response");
+        return;
       }
 
-      // Extract tokens based on response structure
-      const { access_token, refresh_token } = isCompletingRegistration
-        ? data
-        : data.data
-
-      if (!access_token || !refresh_token) {
-        throw new Error("Invalid token response")
-      }
-
-      await login(access_token, refresh_token)
+      await login(accessToken, refreshToken);
       toast.success(isCompletingRegistration ? "Registration completed successfully!" : "Login successful")
       router.push("/")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Invalid OTP")
-      console.error(error)
+    } catch (error: any) {
+      console.error("Verification error details:", error);
+      toast.error(error.message || "Invalid OTP")
       throw error
     } finally {
       setIsLoading(false)
@@ -94,22 +79,10 @@ export default function LoginForm() {
 
   const handleResendOtp = async () => {
     try {
-      const endpoint = isCompletingRegistration ? "resendRegistrationOTP" : "login"
-      const response = await fetch(`${API_URL}/api/users/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to resend OTP")
-      }
-
+      await apiClient.auth.resendOTP(email, isCompletingRegistration ? 'registration' : 'login')
       toast.success("New verification code sent")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to resend OTP")
+    } catch (error: any) {
+      toast.error(error.message || "Failed to resend OTP")
       throw error
     }
   }
