@@ -35,7 +35,7 @@ export function EventCard({ event }: EventCardProps) {
             className="object-cover transition-transform duration-300 group-hover:scale-105"
           />
           <Badge className="badge-primary absolute left-3 top-3">
-            {event.categoryObject?.name || event.category || 'Uncategorized'}
+            {event.categoryObject?.name || 'Uncategorized'}
           </Badge>
         </div>
         <CardContent className="flex-1 space-y-2.5 border-t border-border/40 p-4">

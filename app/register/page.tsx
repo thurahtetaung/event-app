@@ -30,6 +30,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DatePicker } from "@/components/ui/date-picker"
 import { OtpVerification } from "@/components/auth/OtpVerification"
 import { useAuth } from "@/contexts/AuthContext"
+import { apiClient } from "@/lib/api-client"; // Import apiClient
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -74,8 +75,8 @@ export default function RegisterPage() {
   useEffect(() => {
     async function fetchCountries() {
       try {
-        const response = await fetch("/api/countries")
-        const data = await response.json()
+        // Use apiClient to fetch countries
+        const data = await apiClient.utils.getCountries();
         setCountries(data.countries)
         setDefaultCountry(data.defaultCountry)
         form.setValue("country", data.defaultCountry)
@@ -90,24 +91,15 @@ export default function RegisterPage() {
   async function onSubmit(data: RegisterForm) {
     setIsLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/users/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: data.email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          dateOfBirth: data.dateOfBirth.toISOString(),
-          country: data.country,
-          role: "user",
-        }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || "Registration failed")
-      }
+      // Use apiClient for registration
+      await apiClient.auth.register({
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        dateOfBirth: data.dateOfBirth.toISOString(),
+        country: data.country,
+        role: "user",
+      });
 
       setRegisteredEmail(data.email)
       setShowOtpInput(true)
@@ -123,17 +115,8 @@ export default function RegisterPage() {
   const handleVerifyOtp = async (otp: string) => {
     setIsLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/users/verifyRegistration`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: registeredEmail, otp }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || "Invalid OTP")
-      }
+      // Use apiClient for OTP verification
+      const data = await apiClient.auth.verifyRegistration(registeredEmail, otp);
 
       // Extract both tokens and pass them to login
       const { access_token, refresh_token } = data
@@ -155,17 +138,9 @@ export default function RegisterPage() {
 
   const handleResendOtp = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/users/resendRegistrationOTP`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: registeredEmail }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to resend OTP")
-      }
+      // Use apiClient to resend OTP
+      await apiClient.auth.resendOTP(registeredEmail, 'registration');
+      toast.success("OTP resent successfully");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to resend OTP")
       throw error

@@ -9,11 +9,45 @@ interface ApiClientOptions {
   headers?: HeadersInit;
 }
 
+// Define types for token refresh response and error objects
+interface RefreshTokenResponse {
+  access_token: string;
+  refresh_token: string;
+}
+
+interface ApiError {
+  status: number;
+  statusText?: string;
+  message: string;
+  error?: any; // Keep 'any' for the raw error, but use message for display
+  endpoint?: string;
+}
+
+// Define type for verifyRegistration response
+interface VerifyRegistrationResponse {
+  access_token: string;
+  refresh_token: string;
+  // Add other potential properties if needed
+}
+
+// Define type for reserveTickets response
+interface ReserveTicketsResponse {
+  success: boolean;
+  message: string;
+  tickets: Array<{ id: string; /* ... other ticket properties */ }>;
+}
+
+// Define type for countries response
+interface CountriesResponse {
+  countries: Array<{ code: string; name: string }>;
+  defaultCountry: string;
+}
+
 class ApiClient {
   private baseUrl: string;
   private defaultOptions: RequestInit;
   private abortControllers: Map<string, AbortController>;
-  private refreshPromise: Promise<any> | null = null;
+  private refreshPromise: Promise<RefreshTokenResponse> | null = null;
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl || API_BASE_URL;
@@ -42,7 +76,7 @@ class ApiClient {
     }
   }
 
-  private async refreshToken() {
+  private async refreshToken(): Promise<RefreshTokenResponse> {
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
@@ -61,7 +95,7 @@ class ApiClient {
         if (!response.ok) {
           throw new Error('Failed to refresh token');
         }
-        const data = await response.json();
+        const data: RefreshTokenResponse = await response.json();
         Cookies.set('token', data.access_token, {
           expires: 7,
           path: '/',
@@ -99,13 +133,14 @@ class ApiClient {
         this.abortControllers.delete(requestKey);
       }
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) { // Use unknown instead of any
       if (controller) {
         this.abortControllers.delete(requestKey);
       }
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         throw new Error('Request was cancelled');
       }
+      // Re-throw other errors to be handled by executeRequest
       throw error;
     }
   }
@@ -136,20 +171,29 @@ class ApiClient {
       }
 
       // Try to parse the JSON, but handle potential parsing errors
-      let data;
+      let data: any; // Keep any here for initial parsing flexibility
       try {
         data = await response.json();
-      } catch (e) {
-        data = { message: 'Invalid response from server' };
+      } catch (parseError) { // Catch specific error
+        // If parsing fails, create a specific error object
+        const parseErrorObject: ApiError = {
+          status: response.status, // Use original response status
+          statusText: response.statusText,
+          message: 'Invalid response format from server',
+          error: parseError,
+          endpoint
+        };
+        console.error(`API Parse Error (${response.status}):`, parseErrorObject);
+        throw parseErrorObject;
       }
 
       if (!response.ok) {
         // Enhanced error object with specific handling for common status codes
-        const errorObject = {
+        const errorObject: ApiError = {
           status: response.status,
           statusText: response.statusText,
-          message: data.message || data.error?.message || this.getDefaultErrorMessage(response.status),
-          error: data.error || data, // Include the full error object
+          message: data?.message || data?.error?.message || this.getDefaultErrorMessage(response.status),
+          error: data?.error || data, // Include the full error object if available
           endpoint
         };
 
@@ -157,23 +201,31 @@ class ApiClient {
         throw errorObject;
       }
 
-      return data;
-    } catch (error: any) {
+      return data as T; // Assert type T here after success
+    } catch (error: unknown) { // Use unknown instead of any
       // If the error is already our enhanced error object, just rethrow it
-      if (error && typeof error === 'object' && 'status' in error) {
-        throw error;
+      if (error && typeof error === 'object' && 'status' in error && 'message' in error) {
+        throw error as ApiError;
       }
 
       // Handle refresh token errors
-      if (error.message?.includes('refresh token')) {
+      if (error instanceof Error && error.message?.includes('refresh token')) {
         // Clear tokens on refresh error
         Cookies.remove('token');
         Cookies.remove('refreshToken');
+        // Throw a specific ApiError for refresh failure
+        const refreshError: ApiError = {
+          status: 401, // Typically 401
+          message: 'Session expired. Please log in again.',
+          error: error,
+          endpoint
+        };
+        throw refreshError;
       }
 
       // Handle network errors
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        const networkError = {
+        const networkError: ApiError = {
           status: 0,
           message: 'Network error. Please check your connection.',
           error: error,
@@ -183,9 +235,9 @@ class ApiClient {
       }
 
       // Otherwise wrap in our standard error format
-      const wrappedError = {
+      const wrappedError: ApiError = {
         status: 0,
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
         error: error,
         endpoint
       };
@@ -231,8 +283,8 @@ class ApiClient {
       });
     },
 
-    verifyRegistration: async (email: string, otp: string) => {
-      return this.fetch('/api/users/verifyRegistration', {
+    verifyRegistration: async (email: string, otp: string): Promise<VerifyRegistrationResponse> => {
+      return this.fetch<VerifyRegistrationResponse>('/api/users/verifyRegistration', {
         method: 'POST',
         body: JSON.stringify({ email, otp }),
       });
@@ -307,11 +359,11 @@ class ApiClient {
 
         // Create the dates properly in local timezone by using the local date components
         // and explicitly setting hours and minutes
-        let startTime = new Date(year, month, day,
+        const startTime = new Date(year, month, day,
           parseInt(data.startTime.hour),
           parseInt(data.startTime.minute), 0);
 
-        let endTime = new Date(year, month, day,
+        const endTime = new Date(year, month, day,
           parseInt(data.endTime.hour),
           parseInt(data.endTime.minute), 0);
 
@@ -348,7 +400,12 @@ class ApiClient {
         });
       } catch (error) {
         console.error("Error in events.create:", error);
-        throw error;
+        // Ensure the error is re-thrown or handled appropriately
+        if (error instanceof Error) {
+          throw new Error(`Event creation failed: ${error.message}`);
+        } else {
+          throw new Error('An unknown error occurred during event creation.');
+        }
       }
     },
 
@@ -573,8 +630,8 @@ class ApiClient {
         };
       }>>('/api/tickets/my');
     },
-    reserve: async (data: { eventId: string; tickets: Array<{ ticketTypeId: string; quantity: number }> }) => {
-      return this.fetch<{ success: boolean; message: string; tickets: Array<any> }>('/api/tickets/reserve', {
+    reserve: async (data: { eventId: string; tickets: Array<{ ticketTypeId: string; quantity: number }> }): Promise<ReserveTicketsResponse> => {
+      return this.fetch<ReserveTicketsResponse>('/api/tickets/reserve', {
         method: 'POST',
         body: JSON.stringify(data),
       });
@@ -868,7 +925,18 @@ class ApiClient {
   async getAdminEventStatistics(): Promise<EventStatistics[]> {
     return this.fetch<EventStatistics[]>('/api/admin/reports/events/statistics');
   }
+
+  // Add utility endpoints directly to the class
+  utils = {
+    getCountries: async (): Promise<CountriesResponse> => {
+      // 'this' correctly refers to the ApiClient instance here
+      return this.fetch<CountriesResponse>('/api/utils/countries');
+    },
+  };
 }
+
+// Create and export a singleton instance
+export const apiClient = new ApiClient();
 
 // Types
 interface RegisterData {
@@ -992,19 +1060,6 @@ interface RawFormEventData {
   coverImage?: File;
 }
 
-interface FormEventData {
-  title: string;
-  description?: string;
-  startTimestamp: string;
-  endTimestamp: string;
-  venue: string | null;
-  address: string | null;
-  categoryId: string;
-  isOnline: boolean;
-  capacity: number;
-  coverImage?: string;
-}
-
 export interface Event extends EventData {
   id: string;
   organizationId: string;
@@ -1103,8 +1158,5 @@ interface EventStatistics {
   eventOccupancyRate: number;
 }
 
-// Create and export a singleton instance
-export const apiClient = new ApiClient();
-
 // Export types for use in components
-export type { RegisterData, OrganizerApplicationData, RawFormEventData, OrganizationAnalytics, MonthlyRevenueData, UserGrowthData, EventStatistics };
+export type { RegisterData, OrganizerApplicationData, RawFormEventData, OrganizationAnalytics, MonthlyRevenueData, UserGrowthData, EventStatistics, ApiError }; // Add ApiError
