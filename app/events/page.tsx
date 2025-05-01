@@ -1,6 +1,6 @@
 "use client"
 
-import { useSearchParams, usePathname, useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation" // Removed usePathname, useRouter
 import { EventCard } from "@/components/events/EventCard"
 import { EventFilters } from "@/components/events/EventFilters"
 import { Button } from "@/components/ui/button"
@@ -10,40 +10,22 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useCallback, useEffect, useState } from "react"
 import { apiClient } from "@/lib/api-client"
 import type { Event } from "@/lib/api-client"
+// Removed unused DateRange import
 
 export default function EventsPage() {
-  const router = useRouter()
-  const pathname = usePathname()
+  // Removed unused router and pathname
   const searchParams = useSearchParams()
   const [events, setEvents] = useState<Event[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
-  const eventsPerPage = 9 // Show 9 events per page (3x3 grid)
+  const eventsPerPage = 9 // Number of events per page
 
-  // Create URLSearchParams object for manipulation
-  const createQueryString = useCallback(
-    (params: Record<string, string | undefined>) => {
-      const newSearchParams = new URLSearchParams(searchParams.toString())
-
-      // Update search params
-      Object.entries(params).forEach(([key, value]) => {
-        if (value === undefined || value === '') {
-          newSearchParams.delete(key)
-        } else {
-          newSearchParams.set(key, value)
-        }
-      })
-
-      return newSearchParams.toString()
-    },
-    [searchParams]
-  )
-
-  // Get current filter values
+  // Get filter values from URL
   const category = searchParams.get("category") || undefined
   const query = searchParams.get("query") || undefined
   const sort = (searchParams.get("sort") || "date") as 'date' | 'price-low' | 'price-high'
-  const date = searchParams.get("date") || undefined
+  const startDate = searchParams.get("startDate") || undefined // Changed from date
+  const endDate = searchParams.get("endDate") || undefined // Added endDate
   const priceRange = (searchParams.get("priceRange") || undefined) as 'all' | 'free' | 'paid' | undefined
   const minPrice = searchParams.get("minPrice") || undefined
   const maxPrice = searchParams.get("maxPrice") || undefined
@@ -71,7 +53,8 @@ export default function EventsPage() {
           category: category !== "All Categories" ? category : undefined,
           query,
           sort,
-          date,
+          startDate, // Use startDate
+          endDate, // Use endDate
           priceRange: priceRange !== "all" ? priceRange : undefined,
           minPrice,
           maxPrice,
@@ -81,7 +64,7 @@ export default function EventsPage() {
 
         // Remove undefined and empty string values
         const cleanParams = Object.fromEntries(
-          Object.entries(params).filter(([_, value]) =>
+          Object.entries(params).filter(([, value]) => // Changed _ to []
             value !== undefined && value !== ''
           )
         );
@@ -99,7 +82,7 @@ export default function EventsPage() {
     }
 
     fetchEvents()
-  }, [category, query, sort, date, priceRange, minPrice, maxPrice, isOnline, isInPerson])
+  }, [category, query, sort, startDate, endDate, priceRange, minPrice, maxPrice, isOnline, isInPerson]) // Added startDate and endDate to dependency array
 
   // Pagination component
   const Pagination = () => {
@@ -124,15 +107,17 @@ export default function EventsPage() {
       );
 
       // Calculate range of visible page numbers
-      let startPage = Math.max(2, currentPage - Math.floor(maxVisiblePages / 2));
-      let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 3);
+      const startPage = Math.max(2, currentPage - Math.floor(maxVisiblePages / 2)); // Changed let to const
+      const endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 3); // Changed let to const
 
-      // Adjust if we're near the beginning
+      // Add ellipsis if needed before the range
       if (startPage > 2) {
-        pageNumbers.push(<span key="ellipsis-start" className="px-2">...</span>);
+        pageNumbers.push(
+          <span key="ellipsis-start" className="px-2 py-1">...</span>
+        );
       }
 
-      // Add middle page numbers
+      // Add page numbers in the calculated range
       for (let i = startPage; i <= endPage; i++) {
         pageNumbers.push(
           <Button
@@ -147,25 +132,25 @@ export default function EventsPage() {
         );
       }
 
-      // Add ellipsis before last page if needed
+      // Add ellipsis if needed after the range
       if (endPage < totalPages - 1) {
-        pageNumbers.push(<span key="ellipsis-end" className="px-2">...</span>);
-      }
-
-      // Always show last page if more than 1 page
-      if (totalPages > 1) {
         pageNumbers.push(
-          <Button
-            key={totalPages}
-            variant={currentPage === totalPages ? "default" : "outline"}
-            size="sm"
-            onClick={() => handlePageChange(totalPages)}
-            className="w-9 h-9 p-0"
-          >
-            {totalPages}
-          </Button>
+          <span key="ellipsis-end" className="px-2 py-1">...</span>
         );
       }
+
+      // Always show last page
+      pageNumbers.push(
+        <Button
+          key={totalPages}
+          variant={currentPage === totalPages ? "default" : "outline"}
+          size="sm"
+          onClick={() => handlePageChange(totalPages)}
+          className="w-9 h-9 p-0"
+        >
+          {totalPages}
+        </Button>
+      );
 
       return pageNumbers;
     };

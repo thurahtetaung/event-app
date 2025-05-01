@@ -19,44 +19,6 @@ import { format } from "date-fns"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { apiClient } from "@/lib/api-client"
 
-const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  isFree: z.boolean().default(false),
-  price: z.coerce.number().min(0, "Price must be a non-negative number"),
-  quantity: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Quantity must be greater than 0",
-  }),
-  saleStartDate: z.date({
-    required_error: "Sale start date is required",
-  }),
-  saleEndDate: z.date({
-    required_error: "Sale end date is required",
-  }).min(new Date(), "Sale end date must be in the future"),
-  hasMinimumPurchase: z.boolean().default(false),
-  minimumPurchase: z.string().optional(),
-  hasMaximumPurchase: z.boolean().default(false),
-  maximumPurchase: z.string().optional(),
-}).refine((data) => {
-  // Validate that end date is after start date
-  if (data.saleStartDate && data.saleEndDate) {
-    return data.saleEndDate > data.saleStartDate;
-  }
-  return true;
-}, {
-  message: "Sale end date must be after sale start date",
-  path: ["saleEndDate"],
-}).refine((data) => {
-  // If it's a free ticket, price should be 0
-  if (data.isFree) {
-    return Number(data.price) === 0;
-  }
-  return Number(data.price) > 0;
-}, {
-  message: "Paid tickets must have a price greater than 0",
-  path: ["price"],
-});
-
 interface TicketFormProps {
   eventId: string
   initialData?: {
@@ -69,12 +31,64 @@ interface TicketFormProps {
     saleEndDate?: Date
     minimumPurchase?: number
     maximumPurchase?: number
+    soldCount?: number // Add soldCount here
   }
   onSuccess?: () => void
 }
 
 export function TicketForm({ eventId, initialData, onSuccess }: TicketFormProps) {
   const [isLoading, setIsLoading] = useState(false)
+
+  // Define the schema inside the component to access initialData
+  const formSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    description: z.string().optional(),
+    isFree: z.boolean().default(false),
+    price: z.coerce.number().min(0, "Price must be a non-negative number"),
+    quantity: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+      message: "Quantity must be greater than 0",
+    }),
+    saleStartDate: z.date({
+      required_error: "Sale start date is required",
+    }),
+    saleEndDate: z.date({
+      required_error: "Sale end date is required",
+    }).min(new Date(), "Sale end date must be in the future"),
+    hasMinimumPurchase: z.boolean().default(false),
+    minimumPurchase: z.string().optional(),
+    hasMaximumPurchase: z.boolean().default(false),
+    maximumPurchase: z.string().optional(),
+  }).refine((data) => {
+    // Validate that end date is after start date
+    if (data.saleStartDate && data.saleEndDate) {
+      return data.saleEndDate > data.saleStartDate;
+    }
+    return true;
+  }, {
+    message: "Sale end date must be after sale start date",
+    path: ["saleEndDate"],
+  }).refine((data) => {
+    // If it's a free ticket, price should be 0
+    if (data.isFree) {
+      // Allow setting price to 0 explicitly for free tickets
+      return true;
+    }
+    // For paid tickets, price must be greater than 0
+    return Number(data.price) > 0;
+  }, {
+    message: "Paid tickets must have a price greater than 0",
+    path: ["price"],
+  }).refine((data) => {
+    // Validate quantity against sold count if initialData is provided
+    if (initialData?.soldCount !== undefined) {
+      const quantityNum = Number(data.quantity);
+      return !isNaN(quantityNum) && quantityNum >= initialData.soldCount;
+    }
+    return true; // Skip validation if soldCount is not available
+  }, {
+    message: `Quantity cannot be less than the number of tickets already sold (${initialData?.soldCount || 0})`,
+    path: ["quantity"],
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

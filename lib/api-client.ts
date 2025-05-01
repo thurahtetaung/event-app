@@ -442,7 +442,8 @@ class ApiClient {
       category?: string;
       query?: string;
       sort?: 'date' | 'price-low' | 'price-high';
-      date?: string;
+      startDate?: string; // Changed from date
+      endDate?: string; // Added endDate
       priceRange?: 'all' | 'free' | 'paid';
       minPrice?: string;
       maxPrice?: string;
@@ -454,7 +455,8 @@ class ApiClient {
       if (params?.category) searchParams.set('category', params.category);
       if (params?.query) searchParams.set('query', params.query);
       if (params?.sort) searchParams.set('sort', params.sort);
-      if (params?.date) searchParams.set('date', params.date);
+      if (params?.startDate) searchParams.set('startDate', params.startDate);
+      if (params?.endDate) searchParams.set('endDate', params.endDate);
       if (params?.priceRange) searchParams.set('priceRange', params.priceRange);
       if (params?.minPrice) searchParams.set('minPrice', params.minPrice);
       if (params?.maxPrice) searchParams.set('maxPrice', params.maxPrice);

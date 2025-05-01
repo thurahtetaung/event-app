@@ -100,7 +100,8 @@ export default function EditTicketPage({
                 saleStartDate: new Date(ticket.saleStart),
                 saleEndDate: new Date(ticket.saleEnd),
                 maximumPurchase: ticket.maxPerOrder,
-                minimumPurchase: ticket.minPerOrder
+                minimumPurchase: ticket.minPerOrder,
+                soldCount: ticket.soldCount // Pass soldCount here
               }}
               onSuccess={handleSuccess}
             />
