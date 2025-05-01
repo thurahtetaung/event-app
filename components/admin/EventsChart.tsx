@@ -4,17 +4,30 @@ import { useEffect, useState } from "react"
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { apiClient, EventStatistics } from "@/lib/api-client"
 import { Skeleton } from "../ui/skeleton"
+import { TooltipProps } from 'recharts';
+import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 
 // Custom tooltip styles for dark mode
-const CustomTooltip = ({ active, payload, label }: any) => {
+// Define specific types for props instead of using any
+interface CustomTooltipProps extends TooltipProps<ValueType, NameType> {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number | string;
+    color: string;
+  }>;
+  label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white text-gray-900 p-3 rounded-md shadow-md border border-gray-200">
+      <div className="bg-white text-gray-900 p-3 rounded-md shadow-md border border-gray-200 dark:bg-gray-800 dark:text-white dark:border-gray-700">
         <p className="font-medium">{label}</p>
-        {payload.map((entry: any, index: number) => (
+        {payload.map((entry, index: number) => (
           <p key={`item-${index}`} style={{ color: entry.color }} className="flex items-center gap-2">
             <span className="font-medium">{entry.name}:</span>
-            <span className="text-gray-700">
+            <span className="text-gray-700 dark:text-gray-300">
               {entry.name === "Occupancy Rate" ? `${entry.value}%` : entry.value}
             </span>
           </p>
@@ -39,22 +52,18 @@ export function EventsChart() {
 
         // Add placeholder values for testing if they don't exist
         const enhancedData = statistics.map(item => {
-          // Calculate average tickets per event
-          const avgTickets = item.averageTicketsPerEvent ||
+          // Calculate average tickets per event (if not provided by backend)
+          const avgTickets = item.averageTicketsPerEvent ?? // Use backend value first
                             (item.newEvents > 0 ? Math.round(item.ticketsSold / item.newEvents) : 0);
 
-          // Calculate occupancy rate with more variation (using event count as a factor)
-          // This ensures each month has a different occupancy rate
-          const baseRate = Math.min(40 + (item.newEvents % 30), 95);
-          // Add some randomness based on the ticketsSold count to ensure variation
-          const randomFactor = (item.ticketsSold % 10) / 10;
-          const occupancyRate = item.eventOccupancyRate ||
-                               Math.round(baseRate + (randomFactor * 10));
+          // Use the occupancy rate directly from the backend
+          // The backend now calculates this correctly, including 0% for months with no capacity/events
+          const occupancyRate = item.eventOccupancyRate;
 
           return {
             ...item,
             averageTicketsPerEvent: avgTickets,
-            eventOccupancyRate: occupancyRate
+            eventOccupancyRate: occupancyRate // Use the accurate backend value
           };
         })
 
