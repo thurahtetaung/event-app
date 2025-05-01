@@ -6,7 +6,6 @@ const publicRoutes = ["/", "/login", "/register", "/landing"]
 
 // Add routes that should bypass token check
 const bypassRoutes = [
-  "/api/users/refresh-token",
   "/_next",
   "/favicon.ico",
   "/static",
@@ -22,11 +21,6 @@ export function middleware(request: NextRequest) {
 
   // Allow public routes
   if (publicRoutes.some(route => pathname === route || pathname.startsWith(`${route}/`))) {
-    return NextResponse.next()
-  }
-
-  // Allow API routes (they'll handle their own auth)
-  if (pathname.startsWith("/api/")) {
     return NextResponse.next()
   }
 
