@@ -35,6 +35,9 @@ import { apiClient, type RawFormEventData } from "@/lib/api-client"
 import { DatePicker } from "@/components/ui/date-picker"
 import { uploadEventCoverImage } from "@/lib/supabase-client"
 
+// Get a list of timezones supported by the browser
+const supportedTimezones = Intl.supportedValuesOf('timeZone');
+
 interface FormEventData extends RawFormEventData {}
 
 // Default categories in case API fails
@@ -82,6 +85,7 @@ const formSchema = z.object({
   isOnline: z.boolean(),
   capacity: z.number().min(1, "Capacity must be at least 1"),
   coverImage: z.instanceof(File).optional(),
+  timezone: z.string().optional(), // Add optional timezone field
 }).refine((data) => {
   // Convert hours and minutes to numbers
   const startHour = parseInt(data.startTime.hour);
@@ -103,6 +107,8 @@ export function EventCreationForm() {
   const [coverImagePreview, setCoverImagePreview] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
+  const [timezones] = useState<string[]>(supportedTimezones); // Store timezones
+  const [defaultTimezone] = useState<string>(Intl.DateTimeFormat().resolvedOptions().timeZone); // Get user's default timezone
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -123,6 +129,7 @@ export function EventCreationForm() {
     categoryId: "",
     isOnline: false,
       capacity: 100,
+      timezone: defaultTimezone, // Set default timezone
     },
   })
 
@@ -184,6 +191,7 @@ export function EventCreationForm() {
         isOnline: values.isOnline,
         capacity: Number(values.capacity),
         coverImage: values.coverImage,
+        timezone: values.timezone, // Include timezone in the data sent to API
       }
 
       const event = await apiClient.events.create(eventData)
@@ -520,6 +528,38 @@ export function EventCreationForm() {
                   )}
                 />
               </div>
+
+              {/* Timezone Field */}
+              <FormField
+                control={form.control}
+                name="timezone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Timezone</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a timezone" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="max-h-[300px]">
+                        {timezones.map((tz) => (
+                          <SelectItem key={tz} value={tz}>
+                            {tz}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Select the timezone for the event start and end times.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </CardContent>
           </Card>
 
@@ -627,7 +667,7 @@ export function EventCreationForm() {
           </Card>
 
           {/* Preview Features */}
-          <Card>
+          <Card></Card>
             <CardHeader>
               <CardTitle>Advanced Settings (Coming Soon)</CardTitle>
               <CardDescription>

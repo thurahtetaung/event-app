@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { format } from "date-fns"
+import { formatInTimeZone } from 'date-fns-tz'; // Import formatInTimeZone
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -46,6 +47,7 @@ interface Ticket {
     address: string | null;
     isOnline: boolean;
     coverImage?: string;
+    timezone: string; // Add timezone here
     organization?: {
       name: string;
     };
@@ -196,12 +198,16 @@ export default function EventTicketsPage() {
         ctx.fillText(`Organized by: ${ticket.event.organization.name}`, canvas.width/2, startY)
       }
 
-      // Date
-      ctx.fillText(`Date: ${format(new Date(ticket.event.startTimestamp), "PPP")}`, canvas.width/2, startY + lineHeight)
+      // Date - Use formatInTimeZone
+      const formattedDate = formatInTimeZone(new Date(ticket.event.startTimestamp), ticket.event.timezone, "PPP");
+      ctx.fillText(`Date: ${formattedDate}`, canvas.width/2, startY + lineHeight)
 
-      // Time
+      // Time - Use formatInTimeZone
+      const formattedStartTime = formatInTimeZone(new Date(ticket.event.startTimestamp), ticket.event.timezone, "h:mm a");
+      const formattedEndTime = formatInTimeZone(new Date(ticket.event.endTimestamp), ticket.event.timezone, "h:mm a");
+      const timezoneAbbr = formatInTimeZone(new Date(ticket.event.startTimestamp), ticket.event.timezone, "zzz"); // Get timezone abbreviation
       ctx.fillText(
-        `Time: ${format(new Date(ticket.event.startTimestamp), "h:mm a")} - ${format(new Date(ticket.event.endTimestamp), "h:mm a")}`,
+        `Time: ${formattedStartTime} - ${formattedEndTime} (${timezoneAbbr})`,
         canvas.width/2,
         startY + lineHeight * 2
       )
@@ -292,12 +298,14 @@ export default function EventTicketsPage() {
                 )}
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  <span>{format(new Date(event.startTimestamp), "EEE, MMM d, yyyy")}</span>
+                  {/* Format date using timezone */}
+                  <span>{formatInTimeZone(new Date(event.startTimestamp), event.timezone, "EEE, MMM d, yyyy")}</span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Clock className="h-4 w-4" />
+                  {/* Format time using timezone and add abbreviation */}
                   <span>
-                    {format(new Date(event.startTimestamp), "h:mm a")} - {format(new Date(event.endTimestamp), "h:mm a")}
+                    {formatInTimeZone(new Date(event.startTimestamp), event.timezone, "h:mm a")} - {formatInTimeZone(new Date(event.endTimestamp), event.timezone, "h:mm a zzz")}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -358,11 +366,13 @@ export default function EventTicketsPage() {
                       </div>
                       <div className="text-sm text-muted-foreground mt-1">
                         {ticket.ticketType.type === 'free' ? 'Free' : `$${(ticket.ticket.price / 100).toFixed(2)}`}
-                        {ticket.ticket.bookedAt && ` • Purchased on ${format(new Date(ticket.ticket.bookedAt), "MMM d, yyyy 'at' h:mm a")}`}
+                        {/* Format bookedAt using timezone */}
+                        {ticket.ticket.bookedAt && ` • Purchased on ${formatInTimeZone(new Date(ticket.ticket.bookedAt), event.timezone, "MMM d, yyyy 'at' h:mm a zzz")}`}
                       </div>
                       {ticket.ticket.isValidated && ticket.ticket.validatedAt && (
                         <div className="text-xs text-green-600 mt-1">
-                          Validated on: {format(new Date(ticket.ticket.validatedAt), "MMM d, yyyy 'at' h:mm a")}
+                          {/* Format validatedAt using timezone */}
+                          Validated on: {formatInTimeZone(new Date(ticket.ticket.validatedAt), event.timezone, "MMM d, yyyy 'at' h:mm a zzz")}
                         </div>
                       )}
                       <div className="text-xs text-muted-foreground mt-2">

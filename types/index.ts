@@ -15,14 +15,21 @@ export interface TicketType {
 
 export interface Event {
   id: string
-  name: string
+  title: string // Renamed from name for consistency with backend
   description: string
-  startDate: string
-  endDate: string
-  location: string
-  organizerId: string
+  startTimestamp: string // Renamed from startDate
+  endTimestamp: string // Renamed from endDate
+  venue: string // Renamed from location
+  address?: string // Added address
+  isOnline: boolean // Added isOnline
+  coverImage?: string // Added coverImage
+  organizationId: string
   status: "draft" | "published" | "cancelled"
   ticketTypes: TicketType[]
+  timezone: string // Add timezone field
   createdAt: string
   updatedAt: string
+  organization?: { // Added optional organization details
+    name: string
+  }
 }

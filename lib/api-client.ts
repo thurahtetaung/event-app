@@ -392,6 +392,7 @@ class ApiClient {
           isOnline: data.isOnline,
           capacity: data.capacity,
           coverImage: coverImageUrl,
+          timezone: data.timezone, // Include timezone
         };
 
         return this.fetch('/api/events', {
@@ -476,9 +477,21 @@ class ApiClient {
     },
 
     update: async (id: string, data: Partial<EventData>): Promise<Event> => {
+      // Prepare the payload, ensuring timezone is included if present in data
+      const payload: Partial<EventData> = {
+        ...data,
+      };
+      // If startTimestamp or endTimestamp are provided as Date objects, convert them
+      if (data.startTimestamp && typeof data.startTimestamp !== 'string') {
+        payload.startTimestamp = new Date(data.startTimestamp).toISOString();
+      }
+      if (data.endTimestamp && typeof data.endTimestamp !== 'string') {
+        payload.endTimestamp = new Date(data.endTimestamp).toISOString();
+      }
+
       return this.fetch(`/api/events/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload), // Send the potentially updated payload
       });
     },
 
@@ -988,6 +1001,7 @@ export interface EventData {
   capacity: number;
   coverImage?: string;
   status?: "draft" | "published" | "cancelled";
+  timezone?: string; // Add optional timezone
 }
 
 export interface TicketTypeData {
@@ -1060,6 +1074,7 @@ interface RawFormEventData {
   isOnline: boolean;
   capacity: number;
   coverImage?: File;
+  timezone?: string; // Add optional timezone
 }
 
 export interface Event extends EventData {
@@ -1090,6 +1105,7 @@ export interface Event extends EventData {
     status: 'on-sale' | 'paused' | 'sold-out' | 'scheduled';
     soldCount: number;
   }>;
+  timezone?: string; // Add optional timezone
 }
 
 interface PurchaseResult {
