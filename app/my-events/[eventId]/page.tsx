@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { format, formatDistanceToNow } from "date-fns"
+import { format } from "date-fns"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -358,7 +358,7 @@ export default function EventTicketsPage() {
                       </div>
                       <div className="text-sm text-muted-foreground mt-1">
                         {ticket.ticketType.type === 'free' ? 'Free' : `$${(ticket.ticket.price / 100).toFixed(2)}`}
-                        {ticket.ticket.bookedAt && ` • Purchased ${formatDistanceToNow(new Date(ticket.ticket.bookedAt))} ago`}
+                        {ticket.ticket.bookedAt && ` • Purchased on ${format(new Date(ticket.ticket.bookedAt), "MMM d, yyyy 'at' h:mm a")}`}
                       </div>
                       {ticket.ticket.isValidated && ticket.ticket.validatedAt && (
                         <div className="text-xs text-green-600 mt-1">
