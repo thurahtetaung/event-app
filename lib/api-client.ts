@@ -609,6 +609,8 @@ class ApiClient {
           status: string;
           price: number;
           bookedAt?: string;
+          isValidated: boolean; // Add this
+          validatedAt?: string; // Add this
         };
         event: {
           id: string;

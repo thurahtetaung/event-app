@@ -5,7 +5,7 @@ import { format } from "date-fns"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, MapPin, Download, Share2, QrCode, MoreHorizontal, Building2, ArrowLeft } from "lucide-react"
+import { Calendar, Clock, MapPin, Download, Share2, QrCode, MoreHorizontal, Building2, ArrowLeft, CheckCircle, XCircle } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +34,8 @@ interface Ticket {
     status: string;
     price: number;
     bookedAt?: string;
+    isValidated: boolean;
+    validatedAt?: string;
   };
   event: {
     id: string;
@@ -345,8 +347,19 @@ export default function EventTicketsPage() {
                         {ticket.ticketType.type === 'free' ? 'Free' : `$${(ticket.ticket.price / 100).toFixed(2)}`}
                         {ticket.ticket.bookedAt && ` • Purchased on ${format(new Date(ticket.ticket.bookedAt), "MMM d, yyyy")}`}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Ticket ID: {ticket.ticket.id}
+                      <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2">
+                        <span>Ticket ID: {ticket.ticket.id}</span>
+                        {ticket.ticket.isValidated ? (
+                          <Badge variant="outline" className="border-green-500 text-green-600">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Validated
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Not Validated
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
