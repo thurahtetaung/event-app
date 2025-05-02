@@ -19,7 +19,7 @@ interface ApiError {
   status: number;
   statusText?: string;
   message: string;
-  error?: any; // Keep 'any' for the raw error, but use message for display
+  error?: unknown; // Use unknown instead of any
   endpoint?: string;
 }
 
@@ -171,7 +171,7 @@ class ApiClient {
       }
 
       // Try to parse the JSON, but handle potential parsing errors
-      let data: any; // Keep any here for initial parsing flexibility
+      let data: unknown; // Use unknown
       try {
         data = await response.json();
       } catch (parseError) { // Catch specific error
@@ -188,12 +188,31 @@ class ApiClient {
       }
 
       if (!response.ok) {
-        // Enhanced error object with specific handling for common status codes
+        // Type guard to safely access potential error properties
+        const getErrorMessage = (errData: unknown): string => {
+          if (typeof errData === 'object' && errData !== null) {
+            if ('message' in errData && typeof errData.message === 'string') {
+              return errData.message;
+            }
+            if ('error' in errData && typeof errData.error === 'object' && errData.error !== null && 'message' in errData.error && typeof errData.error.message === 'string') {
+              return errData.error.message;
+            }
+          }
+          return this.getDefaultErrorMessage(response.status);
+        };
+
+        const getErrorDetails = (errData: unknown): unknown => {
+          if (typeof errData === 'object' && errData !== null && 'error' in errData) {
+            return errData.error;
+          }
+          return errData;
+        };
+
         const errorObject: ApiError = {
           status: response.status,
           statusText: response.statusText,
-          message: data?.message || data?.error?.message || this.getDefaultErrorMessage(response.status),
-          error: data?.error || data, // Include the full error object if available
+          message: getErrorMessage(data),
+          error: getErrorDetails(data), // Include the full error object if available
           endpoint
         };
 

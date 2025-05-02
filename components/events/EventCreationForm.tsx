@@ -667,7 +667,7 @@ export function EventCreationForm() {
           </Card>
 
           {/* Preview Features */}
-          <Card></Card>
+          <Card>
             <CardHeader>
               <CardTitle>Advanced Settings (Coming Soon)</CardTitle>
               <CardDescription>
@@ -701,19 +701,19 @@ export function EventCreationForm() {
                   <FormDescription>
                     Allow attendees to join a waitlist when tickets are sold out
                   </FormDescription>
-                    </div>
+                </div>
                 <Switch disabled checked={false} />
-                  </div>
-                </CardContent>
-              </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-      <div className="flex justify-end gap-4">
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? "Creating..." : "Create Event"}
-        </Button>
-      </div>
-    </form>
+        <div className="flex justify-end gap-4">
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? "Creating..." : "Create Event"}
+          </Button>
+        </div>
+      </form>
     </Form>
   )
 }
