@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter, useParams, useSearchParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { formatDistance, format } from "date-fns"
 import {
   AlertCircle,
@@ -13,7 +13,6 @@ import {
   ArrowLeft,
   Building,
   BadgeCheck,
-  XCircle,
   Key,
   ShieldAlert,
   Mail,
@@ -32,7 +31,6 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { apiClient } from "@/lib/api-client"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
@@ -80,7 +78,6 @@ const accessTokenSchema = z.object({
 type AccessTokenFormValues = z.infer<typeof accessTokenSchema>
 
 export default function TicketValidationPage() {
-  const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
 
@@ -103,7 +100,7 @@ export default function TicketValidationPage() {
     },
   })
 
-  function onAccessTokenSubmit(data: AccessTokenFormValues) {
+  function handleManualTokenVerification(data: AccessTokenFormValues) {
     setManualAccessToken(data.accessToken)
     verifyTicket(data.accessToken)
   }
@@ -113,7 +110,11 @@ export default function TicketValidationPage() {
     // Backend API error format
     if (error && typeof error === 'object') {
       // Direct API error response: {"success":false,"error":{"code":"NOT_FOUND","message":"Ticket not found"}}
-      if ('success' in error && error.success === false && 'error' in error) {
+      // Or ApiClient error: { status: 403, message: "Invalid access token", ... }
+      if ('message' in error && typeof error.message === 'string') {
+        return error.message; // Use the message directly if available
+      }
+      if ('success' in error && error.success === false && 'error' in error && typeof error.error === 'object' && error.error && 'message' in error.error) {
         const apiError = error as { success: false; error: { code: string; message: string } };
         return apiError.error.message;
       }
@@ -133,69 +134,73 @@ export default function TicketValidationPage() {
     return "Unknown error occurred";
   }
 
+  // This function is primarily for initial load using query param token
   const verifyTicket = async (tokenToUse?: string) => {
-    const tokenValue = tokenToUse || accessToken
+    const tokenValue = tokenToUse || accessToken // Use manual token if provided, else query param
 
     if (!tokenValue) {
       setIsLoading(false)
-      setError("Access token is required to verify this ticket")
+      // Don't set error here if loading details, only if verifying manually
+      if (tokenToUse) {
+        setError("Access token is required to verify this ticket")
+      }
       return
     }
 
     try {
-      if (!manualAccessToken) {
+      // Only show loading spinner if verifying manually, not on initial load
+      if (tokenToUse) {
         setIsLoading(true)
       }
       setError(null)
 
+      // Use the GET request for verification check
       const data = await apiClient.tickets.verifyTicket(id, ticketId, tokenValue)
-      setTicketDetails(data)
+      setTicketDetails(data) // Update details if verification is successful
+      // Clear manual token if verification was successful
+      if (tokenToUse) {
+        setManualAccessToken(tokenValue)
+        accessTokenForm.reset({ accessToken: tokenValue })
+      }
+
     } catch (err) {
       console.error("Error verifying ticket:", err)
-
       const errorMsg = formatErrorMessage(err);
-      console.log("Error message:", errorMsg);
-
-      if (errorMsg.includes("not found")) {
-        setError(`Ticket #${ticketId} not found. Please check the ticket ID.`)
-      } else if (errorMsg.includes("token") || errorMsg.includes("Token")) {
-        setError("Invalid access token. Please check and try again.")
-      } else if (errorMsg.includes("invalid")) {
-        setError("Invalid ticket ID format. Please check the ticket ID.")
-      } else {
-        setError(errorMsg)
+      setError(errorMsg); // Set the specific error message
+      // Clear details if verification fails
+      // setTicketDetails(null); // Optional: Decide if you want to clear details on verify error
+    } finally {
+      // Only stop loading if verifying manually
+      if (tokenToUse) {
+        setIsLoading(false)
       }
+    }
+  }
+
+  // Fetch initial details without token (public endpoint)
+  const fetchTicketDetails = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const data = await apiClient.tickets.getTicketDetails(id, ticketId)
+      setTicketDetails(data)
+
+      // If query param accessToken exists, try to verify it automatically
+      if (accessToken) {
+        await verifyTicket(accessToken)
+      }
+
+    } catch (err) {
+      console.error("Error fetching ticket details:", err)
+      const errorMsg = formatErrorMessage(err);
+      setError(errorMsg)
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    const fetchTicketDetails = async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
-
-        const data = await apiClient.tickets.getTicketDetails(id, ticketId)
-        setTicketDetails(data)
-      } catch (err) {
-        console.error("Error fetching ticket details:", err)
-
-        const errorMsg = formatErrorMessage(err);
-        console.log("Error message:", errorMsg);
-
-        if (errorMsg.includes("not found")) {
-          setError(`Ticket #${ticketId} not found. Please check the ticket ID.`)
-        } else if (errorMsg.includes("invalid")) {
-          setError(`Invalid ticket ID format. Please check the ticket ID.`)
-        } else {
-          setError(errorMsg)
-        }
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
     if (id && ticketId) {
       fetchTicketDetails()
     } else {
@@ -203,59 +208,57 @@ export default function TicketValidationPage() {
       if (!id) setError("Event ID is missing")
       if (!ticketId) setError("Ticket ID is missing")
     }
-
-    if (id && ticketId && accessToken) {
-      verifyTicket()
-    }
-  }, [id, ticketId, accessToken])
+    // Intentionally exclude accessToken from dependency array to avoid re-triggering verify on every render
+    // Verification via query param happens once within fetchTicketDetails
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, ticketId])
 
   const handleValidateTicket = async () => {
+    // Use the manually entered/verified token OR the query param token
+    const tokenToUse = manualAccessToken || accessToken
+
     if (!ticketDetails) {
-      setError("Invalid ticket")
+      setError("Cannot validate: Ticket details not loaded.")
       return
     }
 
-    const tokenToUse = accessToken || manualAccessToken
+    if (ticketDetails.ticket.isValidated) {
+      setError("This ticket has already been validated.")
+      return
+    }
 
     if (!tokenToUse) {
-      setError("Access token is required for validation")
+      setError("Access token is required for validation. Please enter it below.")
       return
     }
 
     try {
       setIsValidating(true)
-      setError(null)
-
+      setError(null) // Clear previous errors
+      setValidationSuccess(false)
       setValidationMessage("Processing ticket validation...")
 
+      // *** Use the POST request for actual validation ***
       const response = await apiClient.tickets.validateTicket(id, ticketId, tokenToUse)
 
       setValidationSuccess(true)
       setValidationMessage(response.message)
 
+      // Update state to reflect validation
       setTicketDetails({
         ...ticketDetails,
         ticket: {
           ...ticketDetails.ticket,
           isValidated: true,
-          validatedAt: response.ticket.validatedAt,
+          validatedAt: response.ticket.validatedAt, // Use time from response
         }
       })
     } catch (err) {
       console.error("Error validating ticket:", err)
       setValidationSuccess(false)
       setValidationMessage("")
-
       const errorMsg = formatErrorMessage(err);
-      console.log("Error message:", errorMsg);
-
-      if (errorMsg.includes("token") || errorMsg.includes("Token")) {
-        setError("Invalid access token. The token may have expired or been used already.")
-      } else if (errorMsg.includes("already validated")) {
-        setError("This ticket has already been validated.")
-      } else {
-        setError(errorMsg)
-      }
+      setError(errorMsg); // Display specific error from backend
     } finally {
       setIsValidating(false)
     }
@@ -286,7 +289,7 @@ export default function TicketValidationPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-destructive">Error Loading Ticket</CardTitle>
-            <CardDescription>We couldn't find or load this ticket</CardDescription>
+            <CardDescription>We couldn&apos;t find or load this ticket</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Alert variant="destructive">
@@ -565,9 +568,10 @@ export default function TicketValidationPage() {
                 </div>
               ) : (
                 <>
-                  {(!accessToken && !manualAccessToken) ? (
+                  {(!accessToken && !manualAccessToken && !isAlreadyValidated) ? (
                     <Form {...accessTokenForm}>
-                      <form onSubmit={accessTokenForm.handleSubmit(onAccessTokenSubmit)} className="space-y-4">
+                      {/* Use handleManualTokenVerification for the form submission */}
+                      <form onSubmit={accessTokenForm.handleSubmit(handleManualTokenVerification)} className="space-y-4">
                         <FormField
                           control={accessTokenForm.control}
                           name="accessToken"
@@ -583,6 +587,11 @@ export default function TicketValidationPage() {
                                       error ? "border-red-500 pr-10 focus-visible:ring-red-300" : "focus-visible:ring-primary/50",
                                       "text-base py-6 px-4 shadow-sm transition-all"
                                     )}
+                                    // Clear error when user types
+                                    onChange={(e) => {
+                                      field.onChange(e);
+                                      if (error) setError(null);
+                                    }}
                                   />
                                   {error && (
                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500">
@@ -611,7 +620,7 @@ export default function TicketValidationPage() {
                               <span className="bg-primary/10 rounded-full h-5 w-5 flex items-center justify-center text-xs mr-2 mt-0.5">
                                 1
                               </span>
-                              <span>On the ticket's QR code</span>
+                              <span>On the ticket&apos;s QR code</span>
                             </li>
                             <li className="flex items-start">
                               <span className="bg-primary/10 rounded-full h-5 w-5 flex items-center justify-center text-xs mr-2 mt-0.5">
@@ -623,7 +632,7 @@ export default function TicketValidationPage() {
                               <span className="bg-primary/10 rounded-full h-5 w-5 flex items-center justify-center text-xs mr-2 mt-0.5">
                                 3
                               </span>
-                              <span>In the attendee's "My Tickets"</span>
+                              <span>In the attendee&apos;s &quot;My Tickets&quot;</span>
                             </li>
                           </ul>
                         </div>
@@ -658,6 +667,7 @@ export default function TicketValidationPage() {
                       </form>
                     </Form>
                   ) : (
+                    // Show validation button area if token is available (from query or manual input)
                     <div className="space-y-6">
                       {error ? (
                         <Alert variant="destructive">
@@ -671,15 +681,26 @@ export default function TicketValidationPage() {
                           </AlertTitle>
                           <AlertDescription>{error}</AlertDescription>
                         </Alert>
+                      ) : validationSuccess ? (
+                        // Show success message after validation
+                        <Alert className="bg-green-50 border-green-200">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <AlertTitle className="text-green-700">Success</AlertTitle>
+                          <AlertDescription className="text-green-600">
+                            {validationMessage}
+                          </AlertDescription>
+                        </Alert>
                       ) : (
+                        // Show verified message before validation
                         <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
-                          <p className="text-center">Access token verified successfully</p>
+                          <p className="text-center">Access token verified successfully.</p>
                         </div>
                       )}
 
+                      {/* Validation Button - enabled only if no error and not already validated */}
                       <Button
                         onClick={handleValidateTicket}
-                        disabled={isValidating || error !== null}
+                        disabled={isValidating || error !== null || isAlreadyValidated}
                         className="w-full py-6 text-lg"
                         size="lg"
                       >
@@ -696,9 +717,9 @@ export default function TicketValidationPage() {
                         )}
                       </Button>
 
-                      {!isValidating && !error && (
+                      {!isValidating && !error && !isAlreadyValidated && (
                         <p className="text-center text-sm text-muted-foreground">
-                          Click the button above to validate this ticket and allow entry
+                          Click the button above to validate this ticket and allow entry.
                         </p>
                       )}
                     </div>
