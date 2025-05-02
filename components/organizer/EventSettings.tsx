@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Switch } from "@/components/ui/switch"
 import { Calendar } from "@/components/ui/calendar"
-import { DatePicker } from "@/components/ui/date-picker"
 import { format } from "date-fns"
 import {
   Select,
@@ -41,6 +40,9 @@ import { Upload, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { uploadEventCoverImage } from "@/lib/supabase-client"
 
+// Get a list of timezones supported by the browser
+const supportedTimezones = Intl.supportedValuesOf('timeZone');
+
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
@@ -60,6 +62,7 @@ const formSchema = z.object({
   capacity: z.number().min(1),
   coverImage: z.instanceof(File).optional(),
   status: z.enum(["draft", "published", "cancelled"]).optional(),
+  timezone: z.string().optional(), // Add timezone field
 }).refine((data) => {
   // If it's not an online event, venue and address are required
   if (!data.isOnline) {
@@ -70,6 +73,18 @@ const formSchema = z.object({
 }, {
   message: "Venue and address are required for in-person events",
   path: ["venue"],
+}).refine((data) => {
+  // Convert hours and minutes to numbers
+  const startHour = parseInt(data.startTime.hour);
+  const startMinute = parseInt(data.startTime.minute);
+  const endHour = parseInt(data.endTime.hour);
+  const endMinute = parseInt(data.endTime.minute);
+
+  // Check if end time is after start time
+  return (endHour > startHour) || (endHour === startHour && endMinute > startMinute);
+}, {
+  message: "End time must be after start time",
+  path: ["endTime"], // Show error on the end time field
 });
 
 interface EventSettingsProps {
@@ -91,6 +106,7 @@ interface EventSettingsProps {
     capacity: number
     coverImage?: string
     status: "draft" | "published" | "cancelled"
+    timezone?: string
   }
   onSuccess?: (event: Partial<EventData>) => void
 }
@@ -103,6 +119,8 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
   const router = useRouter()
   const [coverImagePreview, setCoverImagePreview] = useState<string>(event.coverImage || "")
   const [categories, setCategories] = useState<Array<{id: string, name: string, icon: string}>>([])
+  const [timezones] = useState<string[]>(supportedTimezones); // Store timezones
+  const [defaultTimezone] = useState<string>(event.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone); // Get event's timezone or user's default
 
   // Fetch categories for dropdown
   useEffect(() => {
@@ -138,6 +156,7 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
       isOnline: event.isOnline,
       capacity: event.capacity,
       status: event.status,
+      timezone: event.timezone || defaultTimezone, // Set default timezone
     },
   })
 
@@ -152,11 +171,11 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
 
       // Create the dates properly in local timezone by using the local date components
       // and explicitly setting hours and minutes
-      let startTime = new Date(year, month, day,
+      const startTime = new Date(year, month, day,
         parseInt(data.startTime.hour),
         parseInt(data.startTime.minute), 0);
 
-      let endTime = new Date(year, month, day,
+      const endTime = new Date(year, month, day,
         parseInt(data.endTime.hour),
         parseInt(data.endTime.minute), 0);
 
@@ -181,21 +200,26 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
         capacity: data.capacity,
         status: data.status,
         coverImage: coverImageUrl,
+        timezone: data.timezone, // Include timezone
       };
 
       await apiClient.events.update(event.id, eventData);
       toast.success('Event updated successfully');
       router.refresh();
       onSuccess?.(eventData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating event:', error);
 
       // Extract error message from the API response
       let errorMessage = 'Failed to update event';
 
-      if (error?.error?.message) {
-        errorMessage = error.error.message;
-      } else if (typeof error.message === 'string') {
+      // Type check error before accessing properties
+      if (typeof error === 'object' && error !== null && 'error' in error) {
+        const errorObj = (error as { error: unknown }).error;
+        if (typeof errorObj === 'object' && errorObj !== null && 'message' in errorObj && typeof (errorObj as { message: unknown }).message === 'string') {
+          errorMessage = (errorObj as { message: string }).message;
+        }
+      } else if (error instanceof Error) {
         errorMessage = error.message;
       }
 
@@ -250,7 +274,7 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
           <CardHeader>
             <CardTitle>Cover Image</CardTitle>
             <CardDescription>
-              Update your event's cover image
+              Update your event&apos;s cover image
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -299,7 +323,7 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
           <CardHeader>
             <CardTitle>Basic Information</CardTitle>
             <CardDescription>
-              Update your event's basic information
+              Update your event&apos;s basic information
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
@@ -476,6 +500,38 @@ export function EventSettings({ event, onSuccess }: EventSettingsProps) {
                   </div>
                 </div>
               </div>
+
+              {/* Timezone Field */}
+              <FormField
+                control={form.control}
+                name="timezone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Timezone</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a timezone" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="max-h-[300px]">
+                        {timezones.map((tz) => (
+                          <SelectItem key={tz} value={tz}>
+                            {tz.replace(/_/g, ' ')} {/* Replace underscores for readability */}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Select the timezone for the event start and end times.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <FormField

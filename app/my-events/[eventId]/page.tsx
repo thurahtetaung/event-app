@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
-import { format } from "date-fns"
-import { formatInTimeZone } from 'date-fns-tz'; // Import formatInTimeZone
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import { format } from "date-fns" // Use standard format
+// Remove formatInTimeZone import
+import { Card, CardContent } from "@/components/ui/card" // Removed unused CardDescription, CardHeader, CardTitle
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, MapPin, Download, Share2, QrCode, MoreHorizontal, Building2, ArrowLeft, CheckCircle, XCircle } from "lucide-react"
+// Removed unused Share2
+import { Calendar, Clock, MapPin, Download, QrCode, MoreHorizontal, Building2, ArrowLeft, CheckCircle, XCircle } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +25,7 @@ import {
 import { apiClient } from "@/lib/api-client"
 import { QRCodeSVG } from "qrcode.react"
 
-import ReactDOMServer from "react-dom/server"
+// Removed unused ReactDOMServer import
 import { createRoot } from "react-dom/client"
 import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
@@ -47,7 +48,7 @@ interface Ticket {
     address: string | null;
     isOnline: boolean;
     coverImage?: string;
-    timezone: string; // Add timezone here
+    // Removed timezone property as it's not needed for local time display
     organization?: {
       name: string;
     };
@@ -73,7 +74,7 @@ export default function EventTicketsPage() {
   const [isLoadingQR, setIsLoadingQR] = useState(false)
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
-  const ticketRef = useRef<HTMLDivElement>(null)
+  // Removed unused ticketRef
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -198,16 +199,16 @@ export default function EventTicketsPage() {
         ctx.fillText(`Organized by: ${ticket.event.organization.name}`, canvas.width/2, startY)
       }
 
-      // Date - Use formatInTimeZone
-      const formattedDate = formatInTimeZone(new Date(ticket.event.startTimestamp), ticket.event.timezone, "PPP");
+      // Date - Use standard format
+      const formattedDate = format(new Date(ticket.event.startTimestamp), "PPP");
       ctx.fillText(`Date: ${formattedDate}`, canvas.width/2, startY + lineHeight)
 
-      // Time - Use formatInTimeZone
-      const formattedStartTime = formatInTimeZone(new Date(ticket.event.startTimestamp), ticket.event.timezone, "h:mm a");
-      const formattedEndTime = formatInTimeZone(new Date(ticket.event.endTimestamp), ticket.event.timezone, "h:mm a");
-      const timezoneAbbr = formatInTimeZone(new Date(ticket.event.startTimestamp), ticket.event.timezone, "zzz"); // Get timezone abbreviation
+      // Time - Use standard format
+      const formattedStartTime = format(new Date(ticket.event.startTimestamp), "h:mm a");
+      const formattedEndTime = format(new Date(ticket.event.endTimestamp), "h:mm a");
+      // Remove timezone abbreviation
       ctx.fillText(
-        `Time: ${formattedStartTime} - ${formattedEndTime} (${timezoneAbbr})`,
+        `Time: ${formattedStartTime} - ${formattedEndTime}`, // Removed timezone abbr
         canvas.width/2,
         startY + lineHeight * 2
       )
@@ -298,14 +299,14 @@ export default function EventTicketsPage() {
                 )}
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  {/* Format date using timezone */}
-                  <span>{formatInTimeZone(new Date(event.startTimestamp), event.timezone, "EEE, MMM d, yyyy")}</span>
+                  {/* Format date using standard format */}
+                  <span>{format(new Date(event.startTimestamp), "EEE, MMM d, yyyy")}</span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Clock className="h-4 w-4" />
-                  {/* Format time using timezone and add abbreviation */}
+                  {/* Format time using standard format */}
                   <span>
-                    {formatInTimeZone(new Date(event.startTimestamp), event.timezone, "h:mm a")} - {formatInTimeZone(new Date(event.endTimestamp), event.timezone, "h:mm a zzz")}
+                    {format(new Date(event.startTimestamp), "h:mm a")} - {format(new Date(event.endTimestamp), "h:mm a")}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -366,13 +367,13 @@ export default function EventTicketsPage() {
                       </div>
                       <div className="text-sm text-muted-foreground mt-1">
                         {ticket.ticketType.type === 'free' ? 'Free' : `$${(ticket.ticket.price / 100).toFixed(2)}`}
-                        {/* Format bookedAt using timezone */}
-                        {ticket.ticket.bookedAt && ` • Purchased on ${formatInTimeZone(new Date(ticket.ticket.bookedAt), event.timezone, "MMM d, yyyy 'at' h:mm a zzz")}`}
+                        {/* Format bookedAt using standard format */}
+                        {ticket.ticket.bookedAt && ` • Purchased on ${format(new Date(ticket.ticket.bookedAt), "MMM d, yyyy 'at' h:mm a")}`}
                       </div>
                       {ticket.ticket.isValidated && ticket.ticket.validatedAt && (
                         <div className="text-xs text-green-600 mt-1">
-                          {/* Format validatedAt using timezone */}
-                          Validated on: {formatInTimeZone(new Date(ticket.ticket.validatedAt), event.timezone, "MMM d, yyyy 'at' h:mm a zzz")}
+                          {/* Format validatedAt using standard format */}
+                          Validated on: {format(new Date(ticket.ticket.validatedAt), "MMM d, yyyy 'at' h:mm a")}
                         </div>
                       )}
                       <div className="text-xs text-muted-foreground mt-2">

@@ -7,8 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Calendar, Clock, MapPin, Users, Ticket, Globe, AlertCircle, Plus, Pencil, BadgeCheck } from "lucide-react"
+// Removed unused Separator import
+import { Calendar, MapPin, Ticket, Globe, AlertCircle, Plus, Pencil, BadgeCheck } from "lucide-react" // Removed unused Clock, Users
 import Link from "next/link"
 import { format } from "date-fns"
 import { apiClient } from "@/lib/api-client"
@@ -37,6 +37,7 @@ interface Event {
   ticketsSold: number
   coverImage?: string
   organizationId: string
+  timezone?: string // Add timezone field
 }
 
 interface TicketType {
@@ -54,36 +55,9 @@ interface TicketType {
   soldCount: number
 }
 
-interface TicketFormData {
-  id?: string
-  name: string
-  description?: string
-  price: number
-  quantity: number
-  saleStartDate?: Date
-  saleEndDate?: Date
-  maxPerOrder: number
-  minPerOrder: number
-  type: string
-  allowWaitlist: boolean
-}
+// Removed unused TicketFormData interface
 
-interface EventSettingsData {
-  id: string
-  title: string
-  description: string
-  date: Date
-  startTime: {
-    hour: string
-    minute: string
-  }
-  endTime: {
-    hour: string
-    minute: string
-  }
-  location: string
-  capacity: number
-}
+// Removed unused EventSettingsData interface
 
 export default function EventDetailPage() {
   const router = useRouter()
@@ -101,15 +75,15 @@ export default function EventDetailPage() {
         if (isMounted) {
           setEvent(data as Event)
         }
-      } catch (error: any) {
+      } catch (error: unknown) { // Changed any to unknown
         if (!isMounted) return;
 
         console.error("Error fetching event:", error);
 
         // Check for 404 not found errors
-        if (error?.status === 404 || error?.error?.message?.includes('not found')) {
-          toast.error("Event not found. It may have been deleted or you don't have access to it.");
-          // Delay navigation slightly so the user can see the toast
+        // Type check error before accessing properties
+        if (typeof error === 'object' && error !== null && 'status' in error && (error as { status: unknown }).status === 404) {
+          toast.error("Event not found. It may have been deleted or you don&apos;t have access to it.");
           setTimeout(() => router.push("/organizer/events"), 1500);
         } else if (error instanceof Error && !error.message.includes('Request was cancelled')) {
           toast.error("Failed to load event details");
@@ -141,7 +115,7 @@ export default function EventDetailPage() {
       const updatedEvent = await apiClient.events.getById(event.id)
       setEvent(updatedEvent as Event)
       toast.success(`Event ${newStatus === "published" ? "published" : newStatus === "draft" ? "unpublished" : "cancelled"} successfully`)
-    } catch (error) {
+    } catch (error: unknown) { // Changed any to unknown
       console.error(`Error updating event status:`, error)
       toast.error(`Failed to ${newStatus === "published" ? "publish" : newStatus === "draft" ? "unpublish" : "cancel"} event`)
     } finally {
@@ -189,7 +163,7 @@ export default function EventDetailPage() {
           <AlertCircle className="h-16 w-16 text-muted-foreground mb-4" />
           <h2 className="text-2xl font-bold">Event Not Found</h2>
           <p className="text-muted-foreground mb-6">
-            The event you're looking for doesn't exist or you don't have permission to view it.
+            The event you&apos;re looking for doesn&apos;t exist or you don&apos;t have permission to view it. {/* Escaped apostrophes */}
           </p>
           <Button onClick={() => router.push("/organizer/events")}>
             Go Back to Events
@@ -203,8 +177,7 @@ export default function EventDetailPage() {
     return null
   }
 
-  const startTime = new Date(event.startTimestamp)
-  const endTime = new Date(event.endTimestamp)
+  // Removed unused startTime and endTime variables
 
   return (
     <div className="flex-1 p-8 space-y-8">
@@ -304,7 +277,7 @@ export default function EventDetailPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Reactivate Event</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will reactivate your event as a draft. You'll need to publish it again to make it visible to the public. Are you sure you want to reactivate this event?
+                    This will reactivate your event as a draft. You&apos;ll need to publish it again to make it visible to the public. Are you sure you want to reactivate this event? {/* Escaped apostrophe */}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -329,9 +302,12 @@ export default function EventDetailPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{format(startTime, "PPP")}</div>
+            <div className="text-lg font-semibold">
+              {format(new Date(event.startTimestamp), "PPP")}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {format(startTime, "p")} - {format(endTime, "p")}
+              {format(new Date(event.startTimestamp), "p")} - {format(new Date(event.endTimestamp), "p")}
+              {event.timezone && ` (${event.timezone.replace(/_/g, ' ')})`} {/* Display timezone */}
             </p>
           </CardContent>
         </Card>
@@ -425,7 +401,7 @@ export default function EventDetailPage() {
                 <div>
                   <h3 className="text-lg font-medium">Ticket Types</h3>
                   <p className="text-sm text-muted-foreground">
-                    Manage your event's ticket types
+                    Manage your event&apos;s ticket types {/* Escaped apostrophe */}
                   </p>
                 </div>
                 <Button asChild>
@@ -444,7 +420,7 @@ export default function EventDetailPage() {
                       Get started by creating ticket types for your event. You can set different prices, quantities, and sale periods to offer various options to your attendees.
                     </p>
                     <p className="text-sm text-primary">
-                      Click the "Add Ticket Type" button above to create your first ticket type.
+                      Click the &quot;Add Ticket Type&quot; button above to create your first ticket type. {/* Escaped quotes */}
                     </p>
                   </div>
                 ) : (
