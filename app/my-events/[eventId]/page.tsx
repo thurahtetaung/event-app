@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { format } from "date-fns"
+import { format, formatDistanceToNow } from "date-fns"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -340,41 +340,49 @@ export default function EventTicketsPage() {
             <div className="space-y-4">
               {tickets.map((ticket) => (
                 <Card key={ticket.ticket.id}>
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div>
-                      <h3 className="font-medium">{ticket.ticketType.name}</h3>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {ticket.ticketType.type === 'free' ? 'Free' : `$${(ticket.ticket.price / 100).toFixed(2)}`}
-                        {ticket.ticket.bookedAt && ` • Purchased on ${format(new Date(ticket.ticket.bookedAt), "MMM d, yyyy")}`}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2">
-                        <span>Ticket ID: {ticket.ticket.id}</span>
+                  <CardContent className="flex items-start justify-between p-4">
+                    <div className="flex-grow pr-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-medium">{ticket.ticketType.name}</h3>
                         {ticket.ticket.isValidated ? (
-                          <Badge variant="outline" className="border-green-500 text-green-600">
+                          <Badge variant="outline" className="border-green-500 text-green-600 flex-shrink-0">
                             <CheckCircle className="h-3 w-3 mr-1" />
-                            Validated
+                            Used for entry
                           </Badge>
                         ) : (
-                          <Badge variant="secondary">
+                          <Badge variant="secondary" className="flex-shrink-0">
                             <XCircle className="h-3 w-3 mr-1" />
                             Not Validated
                           </Badge>
                         )}
                       </div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {ticket.ticketType.type === 'free' ? 'Free' : `$${(ticket.ticket.price / 100).toFixed(2)}`}
+                        {ticket.ticket.bookedAt && ` • Purchased ${formatDistanceToNow(new Date(ticket.ticket.bookedAt))} ago`}
+                      </div>
+                      {ticket.ticket.isValidated && ticket.ticket.validatedAt && (
+                        <div className="text-xs text-green-600 mt-1">
+                          Validated on: {format(new Date(ticket.ticket.validatedAt), "MMM d, yyyy 'at' h:mm a")}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Ticket ID: {ticket.ticket.id}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-end space-y-2 flex-shrink-0">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleViewQR(ticket)}
                         disabled={isLoadingQR}
+                        className="w-full justify-start"
                       >
                         <QrCode className="mr-2 h-4 w-4" />
                         Show QR
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 self-end">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
