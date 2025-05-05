@@ -6,7 +6,6 @@ import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { format } from "date-fns"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -55,6 +54,7 @@ export default function RegisterPage() {
   const { login } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [countries, setCountries] = useState<Country[]>([])
+  const [defaultCountry, setDefaultCountry] = useState("")
   const [showOtpInput, setShowOtpInput] = useState(false)
   const [registeredEmail, setRegisteredEmail] = useState("")
 
@@ -254,7 +254,7 @@ export default function RegisterPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Country</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={defaultCountry}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select your country" />
