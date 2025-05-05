@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -14,10 +14,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Tag,
+  Loader2, // Import Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
+import { toast } from "sonner"
 
 const sidebarItems = [
   {
@@ -58,9 +60,74 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { user, loading, logout } = useAuth()
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const router = useRouter()
+  const redirectInitiatedRef = useRef(false);
 
+  // Role checking and redirection
+  useEffect(() => {
+    // Log entry point with current state
+    console.log(`[AdminLayout] useEffect triggered. Path: ${pathname}, Loading: ${loading}, User:`, user, `Redirect Ref: ${redirectInitiatedRef.current}`);
+
+    // Check if redirect has already been initiated
+    if (redirectInitiatedRef.current) {
+      console.log("[AdminLayout] Redirect already initiated, skipping.");
+      return;
+    }
+
+    // Wait until loading is complete
+    if (loading) {
+      console.log("[AdminLayout] Still loading auth state...");
+      return; // Do nothing while loading
+    }
+
+    console.log("[AdminLayout] Auth loading complete.");
+
+    // If loading is done and there's no user, redirect to login
+    if (!user) {
+      console.log("[AdminLayout] No user found after loading. Setting redirect flag and redirecting to login.");
+      if (!redirectInitiatedRef.current) {
+        redirectInitiatedRef.current = true; // Set flag
+        // toast.error("Authentication required. Redirecting to login."); // REMOVED TOAST
+        router.replace('/login?from=' + pathname); // Use replace to avoid history entry
+      }
+      return;
+    }
+
+    // If user exists but is not an admin, show toast and redirect
+    console.log(`[AdminLayout] User found. Role: ${user.role}`);
+    if (user.role !== 'admin') {
+      console.log(`[AdminLayout] Access Denied - Role: ${user.role}. Setting redirect flag and redirecting.`);
+      redirectInitiatedRef.current = true; // Set flag
+      toast.error("Access Denied: You do not have permission to view this page.")
+      let redirectPath = "/";
+      if (user.role === 'organizer') {
+        redirectPath = '/organizer/dashboard';
+      }
+      console.log(`[AdminLayout] Redirecting non-admin to: ${redirectPath}`);
+      router.replace(redirectPath); // Use replace
+      return;
+    }
+
+    // If user is admin, allow rendering
+    console.log("[AdminLayout] User is admin. Allowing access.");
+
+  }, [user, loading, router, pathname])
+
+  // Show loading state while auth check is in progress
+  console.log(`[AdminLayout] Rendering check. Loading: ${loading}, User:`, user);
+  if (loading || !user || user.role !== 'admin') {
+    console.log("[AdminLayout] Rendering loading/permission check screen.");
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Render the actual layout if loading is done and user is admin
+  console.log("[AdminLayout] Rendering main layout.");
   return (
     <TooltipProvider>
       <div className="flex h-[calc(100vh-4rem)]">

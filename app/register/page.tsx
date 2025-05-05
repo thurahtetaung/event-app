@@ -32,7 +32,6 @@ import { OtpVerification } from "@/components/auth/OtpVerification"
 import { useAuth } from "@/contexts/AuthContext"
 import { apiClient } from "@/lib/api-client"; // Import apiClient
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
 const registerSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters").max(50),
@@ -56,7 +55,6 @@ export default function RegisterPage() {
   const { login } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [countries, setCountries] = useState<Country[]>([])
-  const [defaultCountry, setDefaultCountry] = useState<string>("")
   const [showOtpInput, setShowOtpInput] = useState(false)
   const [registeredEmail, setRegisteredEmail] = useState("")
 

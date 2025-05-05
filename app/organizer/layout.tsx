@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react" // Import useRef
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation" // Import useRouter
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -12,10 +12,13 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Loader2, // Import Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
+// Revert import to use the local UI component for all tooltip parts
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
+import { toast } from "sonner" // Import toast
 
 const sidebarItems = [
   {
@@ -49,9 +52,75 @@ export default function OrganizerLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { user, loading, logout } = useAuth()
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const router = useRouter()
+  const redirectInitiatedRef = useRef(false); // Add ref to track redirection
 
+  // Role checking and redirection
+  useEffect(() => {
+    console.log(`[OrganizerLayout] useEffect triggered - Loading: ${loading}, User:`, user);
+
+    // Check if redirect has already been initiated
+    if (redirectInitiatedRef.current) {
+      console.log("[OrganizerLayout] Redirect already initiated, skipping.");
+      return;
+    }
+
+    if (loading) {
+      console.log("[OrganizerLayout] Still loading...");
+      return;
+    }
+
+    if (!user) {
+      console.log("[OrganizerLayout] No user found after loading. Redirecting to login.");
+      if (!redirectInitiatedRef.current) { // Check ref before redirecting
+        redirectInitiatedRef.current = true; // Set flag before redirect
+        // toast.error("Authentication required. Redirecting to login."); // REMOVED TOAST
+        router.replace('/login?from=' + pathname);
+      }
+      return;
+    }
+
+    console.log(`[OrganizerLayout] User loaded. Role: ${user.role}`);
+    // If user exists but is NOT strictly 'organizer', show toast and redirect
+    if (user.role !== 'organizer') {
+      console.log(`[OrganizerLayout] Access Denied - Role: ${user.role}. Redirecting.`);
+      redirectInitiatedRef.current = true; // Set flag before redirect
+      toast.error("Access Denied: You do not have permission to view this page.")
+      // Redirect admins to admin dashboard, others to home
+      const redirectPath = user.role === 'admin' ? '/admin/dashboard' : '/';
+      console.log(`[OrganizerLayout] Redirecting to: ${redirectPath}`);
+      router.replace(redirectPath);
+      return;
+    }
+
+    console.log("[OrganizerLayout] User is organizer. Allowing access.");
+    // If user is organizer, do nothing (allow rendering)
+
+  }, [user, loading, router, pathname])
+
+  // Show loading state while auth check is in progress or if user is not organizer
+  if (loading || !user || user.role !== 'organizer') {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Define handleLogout before the return statement
+  const handleLogout = async () => {
+    try {
+      await logout(); // Call the logout function from useAuth context
+      // Redirect is handled within the logout function in AuthContext
+    } catch (error) {
+      console.error("Logout failed:", error);
+      toast.error("Logout failed. Please try again.");
+    }
+  };
+
+  // Render the actual layout if loading is done and user is organizer
   return (
     <TooltipProvider>
       <div className="flex min-h-screen">
@@ -116,7 +185,7 @@ export default function OrganizerLayout({
                       "w-full justify-start gap-3 text-muted-foreground hover:text-foreground",
                       isCollapsed && "justify-center"
                     )}
-                    onClick={logout}
+                    onClick={handleLogout}
                   >
                     <LogOut className="h-4 w-4 shrink-0" />
                     {!isCollapsed && "Logout"}

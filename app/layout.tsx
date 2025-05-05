@@ -4,7 +4,7 @@ import { AuthProvider } from "@/contexts/AuthContext"
 import { SiteHeader } from "@/components/layout/site-header"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { ThemeProvider } from "@/components/providers/theme-provider"
-import { Toaster } from "sonner"
+import { Toaster } from "sonner"; // Correct import path
 import "./globals.css"
 
 const inter = Inter({

@@ -9,8 +9,6 @@ import { toast } from "sonner"
 import { OtpVerification } from "./OtpVerification"
 import { apiClient } from "@/lib/api-client"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
-
 export default function LoginForm() {
   const router = useRouter()
   const [email, setEmail] = useState("")

@@ -11,17 +11,23 @@ import { apiClient, type Event } from "@/lib/api-client"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function HomePage() {
-  const { user } = useAuth()
+  const { user } = useAuth() // Keep user state
   const router = useRouter()
   const [popularEvents, setPopularEvents] = useState<Event[]>([])
   const [trendingEvents, setTrendingEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    console.log(`[HomePage] useEffect triggered. User:`, user); // Log effect trigger and user state
+    // Only redirect if loading is done and there is NO user
     if (!user) {
-      router.push("/landing")
+      console.log("[HomePage] No user found, redirecting to /landing");
+      router.replace("/landing");
+    } else {
+      console.log("[HomePage] User found, staying on page (or waiting for other redirects).");
     }
-  }, [user, router])
+    // No redirection needed if user exists (admin/organizer/user)
+  }, [user, router]) // Remove loading from dependency array
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -50,10 +56,18 @@ export default function HomePage() {
     }
   }, [user])
 
+  // Show loading state or null only if redirecting to /landing
   if (!user) {
-    return null // Return null to prevent flash of content during redirect
+    console.log("[HomePage] Rendering loading/null because no user."); // Log render reason
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p>Loading...</p> {/* Or a more sophisticated loader */}
+      </div>
+    );
   }
 
+  console.log("[HomePage] Rendering main content."); // Log render reason
+  // Render homepage content for any authenticated user
   return (
     <main className="min-h-screen bg-muted/50">
       <div className="sticky top-14 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
