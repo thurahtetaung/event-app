@@ -133,7 +133,7 @@ export default function EventAnalyticsPage({ params }: EventAnalyticsPageProps) 
       icon: BadgeDollarSign,
     },
     {
-      name: "Average Price",
+      name: "Average Revenue",
       value: analytics.totalTicketsSold > 0
         ? `$${(analytics.totalRevenue / analytics.totalTicketsSold).toFixed(2)}`
         : "$0.00",

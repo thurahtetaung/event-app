@@ -42,6 +42,13 @@ interface UserData {
     amount: number
     createdAt: string
     status: string
+    ticketCount: number
+    paymentId?: string
+    ticketTypes: Array<{
+      name: string
+      quantity: number
+      unitPrice: number
+    }>
   }>
   stats?: {
     totalSpent: number
@@ -379,7 +386,7 @@ export default function UserDetailsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Transaction History</CardTitle>
-              <CardDescription>User's payment history and refunds</CardDescription>
+              <CardDescription>User's payment history</CardDescription>
             </CardHeader>
             <CardContent>
               {transactionsLoading ? (
@@ -391,21 +398,50 @@ export default function UserDetailsPage() {
                   {userTransactions.map((transaction) => (
                     <div
                       key={transaction.id}
-                      className="flex items-center justify-between p-4 rounded-lg border"
+                      className="flex flex-col p-4 rounded-lg border"
                     >
-                      <div>
-                        <h4 className="font-medium">{transaction.eventTitle}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {formatDate(transaction.createdAt)}
-                        </p>
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="font-medium">{transaction.eventTitle}</h4>
+                          <div className="text-sm text-muted-foreground">
+                            <p>{formatDate(transaction.createdAt)}</p>
+                            <p>Order ID: {transaction.id.substring(0, 8)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">${transaction.amount.toFixed(2)}</p>
+                          <Badge
+                            variant={transaction.status === "completed" ? "secondary" : "destructive"}
+                          >
+                            {transaction.status === "completed" ? "Paid" : transaction.status}
+                          </Badge>
+                          {transaction.paymentId && transaction.paymentId !== "Free order" && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Payment: {transaction.paymentId.substring(0, 10)}...
+                            </p>
+                          )}
+                          {transaction.paymentId === "Free order" && (
+                            <p className="text-xs text-muted-foreground mt-1">Free tickets</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-medium">${transaction.amount.toFixed(2)}</p>
-                        <Badge
-                          variant={transaction.status === "completed" ? "secondary" : "destructive"}
-                        >
-                          {transaction.status}
-                        </Badge>
+
+                      {/* Ticket types breakdown */}
+                      <div className="mt-2 pt-2 border-t text-sm">
+                        <p className="font-medium mb-1">Ticket breakdown:</p>
+                        <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-muted-foreground">
+                          {transaction.ticketTypes.map((ticket, idx) => (
+                            <div key={idx} className="contents">
+                              <span>{ticket.name}</span>
+                              <span className="text-center">{ticket.quantity}×</span>
+                              <span className="text-right">${ticket.unitPrice.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2 text-sm font-medium flex justify-between">
+                          <span>Total: {transaction.ticketCount} tickets</span>
+                          <span>${transaction.amount.toFixed(2)}</span>
+                        </div>
                       </div>
                     </div>
                   ))}

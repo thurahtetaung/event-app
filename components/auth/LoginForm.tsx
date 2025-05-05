@@ -28,6 +28,15 @@ export default function LoginForm() {
       toast.success("OTP sent to your email")
     } catch (error: any) {
       console.error("Login error:", error)
+
+      // Handle account status errors specifically
+      if (error.status === 403) {
+        // This is for inactive or banned users
+        toast.error(error.message || "Access denied")
+        setShowOtpInput(false)
+        return
+      }
+
       if (error.message?.includes("complete your registration")) {
         setIsCompletingRegistration(true)
         setShowOtpInput(true)
@@ -68,6 +77,14 @@ export default function LoginForm() {
       router.push("/")
     } catch (error: any) {
       console.error("Verification error details:", error);
+
+      // Handle account status errors specifically during verification
+      if (error.status === 403) {
+        toast.error(error.message || "Access denied")
+        setShowOtpInput(false)
+        return
+      }
+
       toast.error(error.message || "Invalid OTP")
       throw error
     } finally {
@@ -80,6 +97,13 @@ export default function LoginForm() {
       await apiClient.auth.resendOTP(email, isCompletingRegistration ? 'registration' : 'login')
       toast.success("New verification code sent")
     } catch (error: any) {
+      // Handle account status errors during resend
+      if (error.status === 403) {
+        toast.error(error.message || "Access denied")
+        setShowOtpInput(false)
+        return
+      }
+
       toast.error(error.message || "Failed to resend OTP")
       throw error
     }
