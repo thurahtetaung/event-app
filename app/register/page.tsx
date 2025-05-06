@@ -29,8 +29,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DatePicker } from "@/components/ui/date-picker"
 import { OtpVerification } from "@/components/auth/OtpVerification"
 import { useAuth } from "@/contexts/AuthContext"
-import { apiClient } from "@/lib/api-client"; // Import apiClient
-
+import { apiClient, type ApiError } from "@/lib/api-client"; // Import apiClient and ApiError type
 
 const registerSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters").max(50),
@@ -54,7 +53,6 @@ export default function RegisterPage() {
   const { login } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [countries, setCountries] = useState<Country[]>([])
-  const [defaultCountry, setDefaultCountry] = useState("")
   const [showOtpInput, setShowOtpInput] = useState(false)
   const [registeredEmail, setRegisteredEmail] = useState("")
 
@@ -76,7 +74,6 @@ export default function RegisterPage() {
         // Use apiClient to fetch countries
         const data = await apiClient.utils.getCountries();
         setCountries(data.countries)
-        setDefaultCountry(data.defaultCountry)
         form.setValue("country", data.defaultCountry)
       } catch (error) {
         console.error("Failed to fetch countries:", error)
@@ -102,9 +99,17 @@ export default function RegisterPage() {
       setRegisteredEmail(data.email)
       setShowOtpInput(true)
       toast.success("Registration successful! Please verify your email.")
-    } catch (error) {
-      console.error("Registration error:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to create account. Please try again.")
+    } catch (error: unknown) { // Explicitly type error as unknown
+      console.error("Registration error:", error);
+      let displayMessage = "Failed to create account. Please try again.";
+      // Check if error is an ApiError-like object with a message property
+      if (error && typeof error === 'object' && 'message' in error && typeof (error as ApiError).message === 'string') {
+        displayMessage = (error as ApiError).message;
+      } else if (error instanceof Error) { // Fallback for generic Error instances
+        displayMessage = error.message;
+      }
+      // If it's not an ApiError or generic Error with a message, the default message is used.
+      toast.error(displayMessage);
     } finally {
       setIsLoading(false)
     }

@@ -19,6 +19,7 @@ interface ApiError {
   status: number;
   statusText?: string;
   message: string;
+  code?: string; // Added code field
   error?: unknown; // Use unknown instead of any
   endpoint?: string;
 }
@@ -164,10 +165,42 @@ class ApiClient {
       });
 
       if (response.status === 401 && !retried) {
-        // Token expired, try to refresh
-        await this.refreshToken();
-        // Retry the request with new token
-        return this.executeRequest<T>(endpoint, options, signal, true);
+        // Define a type for the expected error JSON structure
+        type ErrorResponseJson = {
+          message?: string;
+          code?: string;
+          // Add other potential error properties if needed
+        };
+        let errorJson: ErrorResponseJson | undefined;
+        try {
+          // Clone the response so it can be read here and also later if not a specific 401
+          const clonedResponse = response.clone();
+          errorJson = await clonedResponse.json() as ErrorResponseJson;
+        } catch (e) {
+          // If parsing the error body fails, proceed with the original refresh logic
+          console.warn('Failed to parse error body for 401 response, proceeding with token refresh:', e);
+          await this.refreshToken();
+          return this.executeRequest<T>(endpoint, options, signal, true);
+        }
+
+        // Check for a specific error code that indicates a non-token-expiry 401 error
+        // Example: error code 'REGISTRATION_PENDING' (ensure backend sends this)
+        if (errorJson && errorJson.code === 'REGISTRATION_PENDING') {
+          const specificApiError: ApiError = {
+            status: response.status,
+            statusText: response.statusText,
+            message: errorJson.message || 'Registration is pending. Please verify your account.',
+            code: errorJson.code,
+            error: errorJson,
+            endpoint
+          };
+          console.error(`Specific API Error (401 - ${errorJson.code}):`, specificApiError);
+          throw specificApiError;
+        } else {
+          // Default behavior: assume token expired, try to refresh
+          await this.refreshToken();
+          return this.executeRequest<T>(endpoint, options, signal, true);
+        }
       }
 
       // Try to parse the JSON, but handle potential parsing errors
@@ -180,6 +213,7 @@ class ApiClient {
           status: response.status, // Use original response status
           statusText: response.statusText,
           message: 'Invalid response format from server',
+          // No specific code available if parsing body fails
           error: parseError,
           endpoint
         };
@@ -194,6 +228,7 @@ class ApiClient {
             if ('message' in errData && typeof errData.message === 'string') {
               return errData.message;
             }
+            // Check nested error.message (common in some backend setups)
             if ('error' in errData && typeof errData.error === 'object' && errData.error !== null && 'message' in errData.error && typeof errData.error.message === 'string') {
               return errData.error.message;
             }
@@ -203,16 +238,24 @@ class ApiClient {
 
         const getErrorDetails = (errData: unknown): unknown => {
           if (typeof errData === 'object' && errData !== null && 'error' in errData) {
-            return errData.error;
+            return errData.error; // Return the nested error object if it exists
           }
-          return errData;
+          return errData; // Otherwise return the full data object as details
+        };
+
+        const getErrorCode = (errData: unknown): string | undefined => {
+          if (typeof errData === 'object' && errData !== null && 'code' in errData && typeof errData.code === 'string') {
+            return errData.code;
+          }
+          return undefined;
         };
 
         const errorObject: ApiError = {
           status: response.status,
           statusText: response.statusText,
           message: getErrorMessage(data),
-          error: getErrorDetails(data), // Include the full error object if available
+          code: getErrorCode(data), // Extract the code
+          error: getErrorDetails(data),
           endpoint
         };
 
