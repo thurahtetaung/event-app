@@ -67,7 +67,7 @@ export default function LoginForm() {
       console.log('Auth response received:', response);
 
       let accessToken, refreshToken;
-      
+
       // verifyLogin returns { data: { access_token, refresh_token } }
       // verifyRegistration returns { access_token, refresh_token }
       if (isCompletingRegistration) {

@@ -94,6 +94,18 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
   )
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [minPerOrderMessage, setMinPerOrderMessage] = useState<{ticketId: string, minPerOrder: number} | null>(null)
+
+  useEffect(() => {
+    // Clear minimum order message after 5 seconds
+    if (minPerOrderMessage) {
+      const timer = setTimeout(() => {
+        setMinPerOrderMessage(null);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [minPerOrderMessage]);
 
   const MAX_TICKETS_PER_ORDER = 10;
   const totalSelectedTickets = Object.values(selectedTickets).reduce((sum, qty) => sum + qty, 0);
@@ -123,6 +135,19 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
       if (newQuantity < 0) return prev
       if (ticket.maxPerOrder && newQuantity > ticket.maxPerOrder) return prev
       if (newQuantity > (ticket.quantity - ticket.soldCount)) return prev
+      
+      // If adding tickets and there's a minimum requirement, automatically set to minimum
+      if (change > 0 && currentQuantity === 0 && ticket.minPerOrder && change < ticket.minPerOrder) {
+        setMinPerOrderMessage({ ticketId, minPerOrder: ticket.minPerOrder });
+        return { ...prev, [ticketId]: ticket.minPerOrder }
+      }
+      
+      // Special case: If decreasing from exactly minPerOrder, jump to 0
+      if (change < 0 && ticket.minPerOrder && currentQuantity === ticket.minPerOrder) {
+        return { ...prev, [ticketId]: 0 }
+      }
+      
+      // Prevent values between 0 and minPerOrder (0 is allowed, minPerOrder and above is allowed)
       if (ticket.minPerOrder && newQuantity > 0 && newQuantity < ticket.minPerOrder) return prev
 
       return { ...prev, [ticketId]: newQuantity }
@@ -195,6 +220,16 @@ export function TicketSelection({ eventId, ticketTypes }: TicketSelectionProps) 
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+        
+        {minPerOrderMessage && (
+          <Alert variant="info" className="bg-blue-50 border-blue-200">
+            <AlertCircle className="h-4 w-4 text-blue-500" />
+            <AlertDescription>
+              {`Minimum purchase of ${minPerOrderMessage.minPerOrder} tickets required for this ticket type. Quantity automatically set to minimum.`}
+            </AlertDescription>
+          </Alert>
+        )}
+        
         {ticketTypes.map((ticket) => {
           // Check if we have the new totalSoldCount property, otherwise fall back to soldCount
           const effectiveSoldCount = ('totalSoldCount' in ticket ? ticket.totalSoldCount : ticket.soldCount) ?? 0;
