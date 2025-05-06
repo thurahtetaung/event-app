@@ -64,28 +64,29 @@ export default function LoginForm() {
         ? await apiClient.auth.verifyRegistration(email, otp)
         : await apiClient.auth.verifyLogin(email, otp)
 
-      // Type-safe access to response properties
       console.log('Auth response received:', response);
 
-      // Type guard to check if response has the expected structure
-      if (response && typeof response === 'object' && 'data' in response) {
-        const responseData = response.data as { access_token?: string; refresh_token?: string };
-        const accessToken = responseData?.access_token;
-        const refreshToken = responseData?.refresh_token;
-
-        if (!accessToken || !refreshToken) {
-          console.error('Missing tokens in response:', responseData);
-          toast.error("Authentication error: Invalid token response");
-          return;
-        }
-
-        await login(accessToken, refreshToken);
-        toast.success(isCompletingRegistration ? "Registration completed successfully!" : "Login successful")
-        router.push("/")
+      let accessToken, refreshToken;
+      
+      // verifyLogin returns { data: { access_token, refresh_token } }
+      // verifyRegistration returns { access_token, refresh_token }
+      if (isCompletingRegistration) {
+        accessToken = response.access_token;
+        refreshToken = response.refresh_token;
       } else {
-        console.error('Invalid response format:', response);
-        toast.error("Authentication error: Unexpected response format");
+        accessToken = response.data?.access_token;
+        refreshToken = response.data?.refresh_token;
       }
+
+      if (!accessToken || !refreshToken) {
+        console.error('Missing tokens in response:', response);
+        toast.error("Authentication error: Invalid token response");
+        return;
+      }
+
+      await login(accessToken, refreshToken);
+      toast.success(isCompletingRegistration ? "Registration completed successfully!" : "Login successful")
+      router.push("/")
     } catch (error: unknown) {
       console.error("Verification error details:", error);
 

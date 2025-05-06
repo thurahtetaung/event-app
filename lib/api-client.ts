@@ -175,12 +175,12 @@ class ApiClient {
         };
 
         let errorJson: ErrorResponseJson | undefined;
-        
+
         // First check if this is a special error code that should not trigger token refresh
         try {
           const clonedResponse = response.clone();
           errorJson = await clonedResponse.json() as ErrorResponseJson;
-          
+
           // Check if this is a registration pending error by examining the nested error.code
           if (
             errorJson?.error?.code === 'REGISTRATION_PENDING' ||
@@ -219,7 +219,7 @@ class ApiClient {
             };
             throw specificApiError;
           }
-          
+
           // Otherwise throw the refresh error
           throw refreshError;
         }
