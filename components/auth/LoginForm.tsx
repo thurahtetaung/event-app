@@ -37,7 +37,12 @@ export default function LoginForm() {
         return
       }
 
-      if (error.message?.includes("complete your registration")) {
+      // Check for registration pending errors with more flexible detection
+      if (
+        error.message?.includes("complete your registration") ||
+        error.message?.includes("REGISTRATION_PENDING") ||
+        (typeof error.message === 'string' && error.message.toLowerCase().includes("verify your email"))
+      ) {
         setIsCompletingRegistration(true)
         setShowOtpInput(true)
         toast.success("Please verify your email to complete registration")
@@ -59,33 +64,45 @@ export default function LoginForm() {
         ? await apiClient.auth.verifyRegistration(email, otp)
         : await apiClient.auth.verifyLogin(email, otp)
 
-      // Debug information - check token structure
-      console.log('Auth response structure:', Object.keys(response));
+      // Type-safe access to response properties
+      console.log('Auth response received:', response);
 
-      // The tokens are nested in response.data for this API
-      const accessToken = response.data?.access_token;
-      const refreshToken = response.data?.refresh_token;
+      // Type guard to check if response has the expected structure
+      if (response && typeof response === 'object' && 'data' in response) {
+        const responseData = response.data as { access_token?: string; refresh_token?: string };
+        const accessToken = responseData?.access_token;
+        const refreshToken = responseData?.refresh_token;
 
-      if (!accessToken || !refreshToken) {
-        console.error('Missing tokens in response:', response);
-        toast.error("Authentication error: Invalid token response");
-        return;
+        if (!accessToken || !refreshToken) {
+          console.error('Missing tokens in response:', responseData);
+          toast.error("Authentication error: Invalid token response");
+          return;
+        }
+
+        await login(accessToken, refreshToken);
+        toast.success(isCompletingRegistration ? "Registration completed successfully!" : "Login successful")
+        router.push("/")
+      } else {
+        console.error('Invalid response format:', response);
+        toast.error("Authentication error: Unexpected response format");
       }
-
-      await login(accessToken, refreshToken);
-      toast.success(isCompletingRegistration ? "Registration completed successfully!" : "Login successful")
-      router.push("/")
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Verification error details:", error);
 
-      // Handle account status errors specifically during verification
-      if (error.status === 403) {
-        toast.error(error.message || "Access denied")
+      // Type guard for error object
+      if (error && typeof error === 'object' && 'status' in error && error.status === 403) {
+        toast.error(
+          'message' in error && typeof error.message === 'string'
+            ? error.message
+            : "Access denied"
+        )
         setShowOtpInput(false)
         return
       }
 
-      toast.error(error.message || "Invalid OTP")
+      toast.error(
+        error instanceof Error ? error.message : "Invalid OTP"
+      )
       throw error
     } finally {
       setIsLoading(false)

@@ -167,39 +167,61 @@ class ApiClient {
       if (response.status === 401 && !retried) {
         // Define a type for the expected error JSON structure
         type ErrorResponseJson = {
-          message?: string;
-          code?: string;
-          // Add other potential error properties if needed
+          success: boolean;
+          error?: {
+            code?: string;
+            message?: string;
+          };
         };
+
         let errorJson: ErrorResponseJson | undefined;
+        
+        // First check if this is a special error code that should not trigger token refresh
         try {
-          // Clone the response so it can be read here and also later if not a specific 401
           const clonedResponse = response.clone();
           errorJson = await clonedResponse.json() as ErrorResponseJson;
+          
+          // Check if this is a registration pending error by examining the nested error.code
+          if (
+            errorJson?.error?.code === 'REGISTRATION_PENDING' ||
+            (errorJson?.error?.message && errorJson.error.message.includes('REGISTRATION_PENDING'))
+          ) {
+            console.log('Registration pending error detected:', errorJson);
+            const specificApiError: ApiError = {
+              status: response.status,
+              statusText: response.statusText,
+              message: errorJson?.error?.message || 'Registration is pending. Please verify your account.',
+              code: 'REGISTRATION_PENDING',
+              error: errorJson,
+              endpoint
+            };
+            throw specificApiError;
+          }
         } catch (e) {
           // If parsing the error body fails, proceed with the original refresh logic
           console.warn('Failed to parse error body for 401 response, proceeding with token refresh:', e);
-          await this.refreshToken();
-          return this.executeRequest<T>(endpoint, options, signal, true);
         }
 
-        // Check for a specific error code that indicates a non-token-expiry 401 error
-        // Example: error code 'REGISTRATION_PENDING' (ensure backend sends this)
-        if (errorJson && errorJson.code === 'REGISTRATION_PENDING') {
-          const specificApiError: ApiError = {
-            status: response.status,
-            statusText: response.statusText,
-            message: errorJson.message || 'Registration is pending. Please verify your account.',
-            code: errorJson.code,
-            error: errorJson,
-            endpoint
-          };
-          console.error(`Specific API Error (401 - ${errorJson.code}):`, specificApiError);
-          throw specificApiError;
-        } else {
-          // Default behavior: assume token expired, try to refresh
+        // Default behavior: assume token expired, try to refresh
+        try {
           await this.refreshToken();
           return this.executeRequest<T>(endpoint, options, signal, true);
+        } catch (refreshError) {
+          // If refresh fails AND we have a specific error code from earlier, use that error
+          if (errorJson?.error?.code === 'REGISTRATION_PENDING') {
+            const specificApiError: ApiError = {
+              status: response.status,
+              statusText: response.statusText,
+              message: errorJson.error.message || 'Registration is pending. Please verify your account.',
+              code: 'REGISTRATION_PENDING',
+              error: errorJson,
+              endpoint
+            };
+            throw specificApiError;
+          }
+          
+          // Otherwise throw the refresh error
+          throw refreshError;
         }
       }
 
