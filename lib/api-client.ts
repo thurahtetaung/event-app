@@ -225,12 +225,18 @@ class ApiClient {
         }
       }
 
+      // Handle 204 No Content responses (common for successful DELETE operations)
+      if (response.status === 204) {
+        // For a 204 response, return an empty object as the successful result
+        return {} as T;
+      }
+
       // Try to parse the JSON, but handle potential parsing errors
       let data: unknown; // Use unknown
       try {
         data = await response.json();
       } catch (parseError) { // Catch specific error
-        // If parsing fails, create a specific error object
+        // If parsing fails and it's not a 204 (which we already handled), create a specific error object
         const parseErrorObject: ApiError = {
           status: response.status, // Use original response status
           statusText: response.statusText,
