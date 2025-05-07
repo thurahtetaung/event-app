@@ -982,6 +982,7 @@ class ApiClient {
       deleteUser: async (id: string) => {
         return this.fetch(`/api/admin/users/${id}`, {
           method: 'DELETE',
+          body: JSON.stringify({}),  // Add empty JSON body to satisfy content-type requirement
         });
       },
 
