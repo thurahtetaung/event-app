@@ -284,10 +284,17 @@ export default function UsersPage() {
                     "cursor-pointer transition-colors hover:bg-muted/50",
                     "group"
                   )}
-                  onClick={() => window.location.href = `/admin/users/${row.original.id}`}
+                  onClick={(e) => {
+                    // Don't navigate if the click was on or inside the actions cell
+                    if (e.target instanceof Node && 
+                        e.currentTarget.querySelector('[data-column="actions"]')?.contains(e.target)) {
+                      return;
+                    }
+                    window.location.href = `/admin/users/${row.original.id}`;
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} data-column={cell.column.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()

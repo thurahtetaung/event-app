@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,7 +20,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
 import { MoreHorizontal, Ban, CheckCircle2, Trash2 } from "lucide-react"
 
 interface UserActionsProps {
@@ -52,8 +50,7 @@ export function UserActions({ userId, userStatus, onStatusChange, onDelete }: Us
       await onStatusChange(userId, pendingStatus)
       setStatus(pendingStatus)
       toast.success(`User status updated to ${pendingStatus}`)
-    } catch (error) {
-      console.error("UserActions: Error updating status:", error)
+    } catch {
       toast.error("Failed to update user status")
     } finally {
       setIsLoading(false)
@@ -63,14 +60,15 @@ export function UserActions({ userId, userStatus, onStatusChange, onDelete }: Us
   }
 
   const handleDelete = async () => {
-    setIsLoading(true)
+    setIsLoading(true);
     try {
-      await onDelete(userId)
+      await onDelete(userId);
+      toast.success("User deleted successfully");
     } catch (error) {
-      toast.error("Failed to delete user")
+      toast.error("Failed to delete user");
     } finally {
-      setIsLoading(false)
-      setIsDeleteDialogOpen(false)
+      setIsLoading(false);
+      setIsDeleteDialogOpen(false);
     }
   }
 
