@@ -105,10 +105,18 @@ export default function UsersPage() {
     try {
       await deleteUser(userId);
 
-      // Update the local state
-      setData(prev => prev.filter(user => user.id !== userId));
-
+      // Update the local state with a new array reference to ensure React detects the change
+      const updatedData = data.filter(user => user.id !== userId);
+      setData(updatedData);
+      
+      // Show success toast and force table refresh
       toast.success("User deleted successfully");
+      
+      // Force table to recalculate rows after state update
+      setTimeout(() => {
+        table.resetRowSelection();
+        table.resetPagination();
+      }, 0);
     } catch (error) {
       toast.error("Failed to delete user");
       console.error("Error in handleDelete:", error);

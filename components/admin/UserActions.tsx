@@ -63,9 +63,10 @@ export function UserActions({ userId, userStatus, onStatusChange, onDelete }: Us
     setIsLoading(true);
     try {
       await onDelete(userId);
-      toast.success("User deleted successfully");
+      // Remove success toast from here as it's handled in the parent component
     } catch (error) {
-      toast.error("Failed to delete user");
+      // Remove error toast from here as it's handled in the parent component
+      console.error("Error deleting user:", error);
     } finally {
       setIsLoading(false);
       setIsDeleteDialogOpen(false);
