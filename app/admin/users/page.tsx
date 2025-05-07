@@ -103,23 +103,31 @@ export default function UsersPage() {
   // Handler for user deletion
   const handleDelete = async (userId: string) => {
     try {
-      await deleteUser(userId);
+      console.log(`Handling delete for user ${userId}`);
 
-      // Update the local state with a new array reference to ensure React detects the change
-      const updatedData = data.filter(user => user.id !== userId);
-      setData(updatedData);
-      
-      // Show success toast and force table refresh
+      // Call API to delete user
+      await deleteUser(userId);
+      console.log(`User ${userId} successfully deleted on backend`);
+
+      // Show success toast immediately
       toast.success("User deleted successfully");
-      
-      // Force table to recalculate rows after state update
-      setTimeout(() => {
-        table.resetRowSelection();
-        table.resetPagination();
-      }, 0);
+
+      // Refetch all users to ensure table is up-to-date
+      setLoading(true);
+      try {
+        const refreshedUsers = await fetchUsers();
+        setData(refreshedUsers);
+        console.log("Successfully refreshed user data after deletion");
+      } catch (refreshError) {
+        console.error("Error refreshing users after deletion:", refreshError);
+        // Still keep the old state updated by filtering out the deleted user
+        setData(prev => prev.filter(user => user.id !== userId));
+      } finally {
+        setLoading(false);
+      }
     } catch (error) {
-      toast.error("Failed to delete user");
       console.error("Error in handleDelete:", error);
+      toast.error("Failed to delete user");
     }
   };
 
@@ -294,7 +302,7 @@ export default function UsersPage() {
                   )}
                   onClick={(e) => {
                     // Don't navigate if the click was on or inside the actions cell
-                    if (e.target instanceof Node && 
+                    if (e.target instanceof Node &&
                         e.currentTarget.querySelector('[data-column="actions"]')?.contains(e.target)) {
                       return;
                     }
